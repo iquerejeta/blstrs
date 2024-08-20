@@ -1,4 +1,5 @@
 //! An implementation of the $\mathbb{G}_1$ group of BLS12-381.
+#![allow(unused_variables)]
 
 use core::{
     borrow::Borrow,
@@ -6,17 +7,21 @@ use core::{
     iter::Sum,
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
-use std::io::Read;
+use std::io::{Read, Write};
 
 use blst::*;
+use ff::Field;
 use group::{
     prime::{PrimeCurve, PrimeCurveAffine, PrimeGroup},
     Curve, Group, GroupEncoding, UncompressedEncoding, WnafGroup,
 };
+use halo2curves::serde::SerdeObject;
+use pasta_curves::arithmetic::{Coordinates, CurveAffine, CurveExt};
 use rand_core::RngCore;
-use subtle::{Choice, ConditionallySelectable, CtOption};
+use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
 use crate::{fp::Fp, Bls12, Engine, G2Affine, Gt, PairingCurveAffine, Scalar};
+use crate::fp::ZETA_BASE;
 
 /// This is an element of $\mathbb{G}_1$ represented in the affine coordinate space.
 /// It is ideal to keep elements in this representation to reduce memory usage and
@@ -27,6 +32,9 @@ pub struct G1Affine(pub(crate) blst_p1_affine);
 
 const COMPRESSED_SIZE: usize = 48;
 const UNCOMPRESSED_SIZE: usize = 96;
+
+pub const A: Fp = Fp::ZERO;
+pub const B: Fp = Fp(blst_fp {l:[4, 0, 0, 0, 0, 0]});
 
 impl fmt::Debug for G1Affine {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -395,7 +403,7 @@ impl G1Affine {
         s + 1
     }
 
-    pub fn write_raw<W: std::io::Write>(&self, mut writer: W) -> Result<usize, std::io::Error> {
+    pub fn write_raw_og<W: std::io::Write>(&self, mut writer: W) -> Result<usize, std::io::Error> {
         if self.is_identity().into() {
             writer.write_all(&[1])?;
         } else {
@@ -407,7 +415,7 @@ impl G1Affine {
         Ok(Self::raw_fmt_size())
     }
 
-    pub fn read_raw<R: Read>(mut reader: R) -> Result<Self, std::io::Error> {
+    pub fn read_raw_og<R: Read>(mut reader: R) -> Result<Self, std::io::Error> {
         let mut buf = [0u8];
         reader.read_exact(&mut buf)?;
         let _infinity = buf[0] == 1;
@@ -837,6 +845,190 @@ impl PairingCurveAffine for G1Affine {
         <Bls12 as Engine>::pairing(self, other)
     }
 }
+
+//////// MISSING TRAITS ////////////////
+impl Add for G1Affine {
+    type Output = <Self as PrimeCurveAffine>::Curve;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        G1Projective::from(self) + rhs
+    }
+}
+
+impl Sub for G1Affine {
+    type Output = <Self as PrimeCurveAffine>::Curve;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        G1Projective::from(self) - rhs
+    }
+}
+
+impl ConstantTimeEq for G1Affine {
+    fn ct_eq(&self, other: &Self) -> Choice {
+        let z1 = self.is_identity();
+        let z2 = other.is_identity();
+
+        (z1 & z2) | ((!z1) & (!z2) & (self.x().ct_eq(&other.x())) & (self.y().ct_eq(&other.y())))
+    }
+}
+
+impl Default for G1Projective {
+    fn default() -> Self {
+        G1Projective::identity()
+    }
+}
+
+impl ConstantTimeEq for G1Projective {
+    fn ct_eq(&self, other: &Self) -> Choice {
+        // Is (x, y, z) equal to (x', y, z') when converted to affine?
+        // => (x/z , y/z) equal to (x'/z' , y'/z')
+        // => (xz' == x'z) & (yz' == y'z)
+
+        let x1 = self.x() * other.z();
+        let y1 = self.y() * other.z();
+
+        let x2 = other.x() * self.z();
+        let y2 = other.y() * self.z();
+
+        let self_is_zero = self.is_identity();
+        let other_is_zero = other.is_identity();
+
+        (self_is_zero & other_is_zero) // Both point at infinity
+            | ((!self_is_zero) & (!other_is_zero) & x1.ct_eq(&x2) & y1.ct_eq(&y2))
+        // Neither point at infinity, coordinates are the same
+    }
+}
+
+impl CurveExt for G1Projective {
+    type ScalarExt = Scalar;
+    type Base = Fp;
+    type AffineExt = G1Affine;
+    const CURVE_ID: &'static str = "";
+
+    fn endo(&self) -> Self {
+        G1Projective::from_raw_unchecked(self.x() * ZETA_BASE, self.y(), self.z())
+    }
+
+    fn jacobian_coordinates(&self) -> (Self::Base, Self::Base, Self::Base) {
+        // Homogeneous to Jacobian
+        let x = self.x() * self.z();
+        let y = self.y() * self.z().square();
+        (x, y, self.z())
+    }
+
+    fn hash_to_curve<'a>(domain_prefix: &'a str) -> Box<dyn Fn(&[u8]) -> Self + 'a> {
+        todo!()
+    }
+
+    fn is_on_curve(&self) -> Choice {
+        self.is_on_curve()
+    }
+
+    fn a() -> Self::Base {
+        A
+    }
+
+    fn b() -> Self::Base {
+        B
+    }
+
+    fn new_jacobian(x: Self::Base, y: Self::Base, z: Self::Base) -> CtOption<Self> {
+        // Jacobian to homogeneous
+        let z_inv = z.invert().unwrap_or(Fp::ZERO);
+        let p_x = x * z_inv;
+        let p_y = y * z_inv.square();
+        let p = G1Projective::from_raw_unchecked(
+            p_x,
+            Fp::conditional_select(&p_y, &Fp::ONE, z.is_zero()),
+            z
+        );
+        CtOption::new(p, p.is_on_curve())
+    }
+}
+
+impl CurveAffine for G1Affine {
+    type ScalarExt = Scalar;
+    type Base = Fp;
+    type CurveExt = G1Projective;
+
+    fn coordinates(&self) -> CtOption<Coordinates<Self>> {
+        Coordinates::from_xy(self.x(), self.y())
+    }
+
+    fn from_xy(x: Self::Base, y: Self::Base) -> CtOption<Self> {
+        let p = Self::from_raw_unchecked(x, y, false);
+        CtOption::new(p, p.is_on_curve())
+    }
+
+    fn is_on_curve(&self) -> Choice {
+        (self.y().square() - self.x().square() * self.x()).ct_eq(&B)
+            | self.is_identity()
+    }
+
+    fn a() -> Self::Base {
+        A
+    }
+
+    fn b() -> Self::Base {
+        B
+    }
+}
+
+
+//////// SERDE IMPLEMENTATION ///////////////
+impl SerdeObject for G1Affine {
+    fn from_raw_bytes_unchecked(bytes: &[u8]) -> Self {
+        todo!()
+    }
+
+    fn from_raw_bytes(bytes: &[u8]) -> Option<Self> {
+        todo!()
+    }
+
+    fn to_raw_bytes(&self) -> Vec<u8> {
+        todo!()
+    }
+
+    fn read_raw_unchecked<R: Read>(reader: &mut R) -> Self {
+        todo!()
+    }
+
+    fn read_raw<R: Read>(reader: &mut R) -> std::io::Result<Self> {
+        Self::read_raw_og(reader)
+    }
+
+    fn write_raw<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        let _ = self.write_raw_og(writer)?;
+        Ok(())
+    }
+}
+
+impl SerdeObject for G1Projective {
+    fn from_raw_bytes_unchecked(bytes: &[u8]) -> Self {
+        todo!()
+    }
+
+    fn from_raw_bytes(bytes: &[u8]) -> Option<Self> {
+        todo!()
+    }
+
+    fn to_raw_bytes(&self) -> Vec<u8> {
+        todo!()
+    }
+
+    fn read_raw_unchecked<R: Read>(reader: &mut R) -> Self {
+        todo!()
+    }
+
+    fn read_raw<R: Read>(reader: &mut R) -> std::io::Result<Self> {
+        todo!()
+    }
+
+    fn write_raw<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        todo!()
+    }
+}
+//////// SERDE IMPLEMENTATION ///////////////
 
 #[cfg(feature = "gpu")]
 impl ec_gpu::GpuName for G1Affine {

@@ -9,10 +9,11 @@ use core::{
     iter::{Product, Sum},
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
+use std::convert::TryFrom;
 
 use blst::*;
 use byte_slice_cast::AsByteSlice;
-use ff::{Field, FieldBits, PrimeField, PrimeFieldBits};
+use ff::{Field, FieldBits, FromUniformBytes, PrimeField, PrimeFieldBits, WithSmallOrderMulGroup};
 use rand_core::RngCore;
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
@@ -695,6 +696,66 @@ impl ec_gpu::GpuField for Scalar {
         crate::u64_to_u32(&MODULUS[..])
     }
 }
+
+////////////// MISSING CONSTANTS AND TRAITS ///////////////
+
+// GF(0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001).primitive_element() ^ ((0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001 - 1) // 3)
+const ZETA: Scalar = Scalar(blst_fr {
+    l: [0x00000000ffffffff, 0xac45a4010001a402, 0x00, 0x00],
+});
+
+impl WithSmallOrderMulGroup<3> for Scalar {
+    const ZETA: Self = ZETA;
+}
+
+/// R^3 = 2^768 mod q
+const R3: Scalar = Scalar(blst_fr {
+    l: [
+        0xc62c_1807_439b_73af,
+        0x1b3e_0d18_8cf0_6990,
+        0x73d1_3c71_c7b5_f418,
+        0x6e2a_5bb9_c8db_33e9,
+    ],
+});
+
+impl FromUniformBytes<64> for Scalar {
+    /// Converts a 512-bit little endian integer into
+    /// a `Scalar` by reducing by the modulus.
+    fn from_uniform_bytes(bytes: &[u8; 64]) -> Self {
+        // We reduce an arbitrary 512-bit number by decomposing it into two 256-bit digits
+        // with the higher bits multiplied by 2^256. Thus, we perform two reductions
+        //
+        // 1. the lower bits are multiplied by R^2, as normal
+        // 2. the upper bits are multiplied by R^2 * 2^256 = R^3
+        //
+        // and computing their sum in the field. It remains to see that arbitrary 256-bit
+        // numbers can be placed into Montgomery form safely using the reduction. The
+        // reduction works so long as the product is less than R=2^256 multiplied by
+        // the modulus. This holds because for any `c` smaller than the modulus, we have
+        // that (2^256 - 1)*c is an acceptable product for the reduction. Therefore, the
+        // reduction always works so long as `c` is in the field; in this case it is either the
+        // constant `R2` or `R3`.
+        let d0 = Scalar(blst_fr {
+            l: [
+                u64::from_le_bytes(<[u8; 8]>::try_from(&bytes[0..8]).unwrap()),
+                u64::from_le_bytes(<[u8; 8]>::try_from(&bytes[0..8]).unwrap()),
+                u64::from_le_bytes(<[u8; 8]>::try_from(&bytes[0..8]).unwrap()),
+                u64::from_le_bytes(<[u8; 8]>::try_from(&bytes[0..8]).unwrap()),
+            ],
+        });
+        let d1 = Scalar(blst_fr {
+            l: [
+                u64::from_le_bytes(<[u8; 8]>::try_from(&bytes[0..8]).unwrap()),
+                u64::from_le_bytes(<[u8; 8]>::try_from(&bytes[0..8]).unwrap()),
+                u64::from_le_bytes(<[u8; 8]>::try_from(&bytes[0..8]).unwrap()),
+                u64::from_le_bytes(<[u8; 8]>::try_from(&bytes[0..8]).unwrap()),
+            ],
+        });
+        // Convert to Montgomery form
+        d0 * R2 + d1 * R3
+    }
+}
+
 
 #[cfg(test)]
 mod tests {

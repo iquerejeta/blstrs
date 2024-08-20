@@ -7,7 +7,8 @@ use core::{
     cmp, fmt,
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
-use ff::Field;
+use std::ops::Deref;
+use ff::{Field, PrimeField, WithSmallOrderMulGroup};
 use rand_core::RngCore;
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
@@ -680,6 +681,106 @@ impl ec_gpu::GpuField for Fp {
         crate::u64_to_u32(&MODULUS[..])
     }
 }
+
+///////// MISSING CONSTANTS AND TRAITS ///////////////
+// Wrapper needed, because we don't have Default implemented for [0u8; 48]
+#[derive(Copy, Clone)]
+pub struct FpRepr([u8; 48]);
+
+impl From<[u8; 48]> for FpRepr {
+    fn from(bytes: [u8; 48]) -> Self {
+        Self(bytes)
+    }
+}
+
+impl Default for FpRepr {
+    fn default() -> Self {
+        Self([0u8; 48])
+    }
+}
+
+impl Deref for FpRepr {
+    type Target = [u8; 48];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl AsRef<[u8]> for FpRepr {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+impl AsMut<[u8]> for FpRepr {
+    fn as_mut(&mut self) -> &mut [u8] {
+        self.0.as_mut_slice()
+    }
+}
+
+/// `ZETA^3 = 1 mod r` where `ZETA^2 != 1 mod r`
+// computed with sage math:
+// R.<k>=PolynomialRing(GF(0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab))
+// L=(k^3-1).roots();L
+pub const ZETA_BASE: Fp = Fp(blst_fp {
+    l: [
+        0x30f1361b798a64e8,
+        0xf3b8ddab7ece5a2a,
+        0x16a8ca3ac61577f7,
+        0xc26a2ff874fd029b,
+        0x3636b76660701c6e,
+        0x51ba4ab241b6160,
+    ],
+});
+
+/// 2^-1
+const TWO_INV: Fp = Fp(blst_fp {
+    l: [
+        0x1804_0000_0001_5554,
+        0x8550_0005_3ab0_0001,
+        0x633c_b57c_253c_276f,
+        0x6e22_d1ec_31eb_b502,
+        0xd391_6126_f2d1_4ca2,
+        0x17fb_b857_1a00_6596,
+    ],
+});
+
+/// Computed using sage, GF(0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab).primitive_element()
+const MULTIPLICATIVE_GENERATOR: Fp = Fp(blst_fp {
+    l: [0x02, 0x00, 0x00, 0x00, 0x00, 0x00],
+});
+
+impl PrimeField for Fp {
+    type Repr = FpRepr;
+
+    fn from_repr(repr: Self::Repr) -> CtOption<Self> {
+        Fp::from_bytes_be(&repr)
+    }
+
+    fn to_repr(&self) -> Self::Repr {
+        FpRepr(self.to_bytes_be())
+    }
+
+    fn is_odd(&self) -> Choice {
+        todo!()
+    }
+
+    const MODULUS: &'static str = "";
+    const NUM_BITS: u32 = 0;
+    const CAPACITY: u32 = 0;
+    const TWO_INV: Self = TWO_INV;
+    const MULTIPLICATIVE_GENERATOR: Self = MULTIPLICATIVE_GENERATOR;
+    const S: u32 = 0;
+    const ROOT_OF_UNITY: Self = Fp::ZERO;
+    const ROOT_OF_UNITY_INV: Self = Fp::ZERO;
+    const DELTA: Self = Fp::ZERO;
+}
+
+impl WithSmallOrderMulGroup<3> for Fp {
+    const ZETA: Self = ZETA_BASE;
+}
+
 
 #[cfg(test)]
 mod tests {
