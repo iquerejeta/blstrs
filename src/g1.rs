@@ -585,7 +585,7 @@ impl G1Projective {
         // Scalar is 255 bits wide.
         const NBITS: usize = 255;
 
-        unsafe { blst_p1_mult(&mut out, &self.0, scalar.to_bytes_le().as_ptr(), NBITS) };
+        unsafe { blst_p1_mult(&mut out, &self.0, scalar.to_bytes().as_ptr(), NBITS) };
 
         G1Projective(out)
     }
@@ -646,7 +646,7 @@ impl G1Projective {
         let points = p1_affines::from(points);
 
         let mut scalar_bytes: Vec<u8> = Vec::with_capacity(n * 32);
-        for a in scalars.iter().map(|s| s.to_bytes_le()) {
+        for a in scalars.iter().map(|s| s.to_bytes()) {
             scalar_bytes.extend_from_slice(&a);
         }
 

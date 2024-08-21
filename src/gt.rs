@@ -103,8 +103,9 @@ impl Mul<&Scalar> for &Gt {
         // We skip the leading bit because it's always unset for Fq
         // elements.
         for bit in scalar
-            .to_bytes_be()
+            .to_bytes()
             .iter()
+            .rev()
             .flat_map(|byte| (0..8).rev().map(move |i| (byte >> i) & 1 == 1))
             .skip(1)
         {

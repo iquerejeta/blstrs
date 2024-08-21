@@ -15,6 +15,7 @@ rust-version = "1.63"
 rustdoc-args = [ "--html-in-header", "katex-header.html" ]
 
 [dependencies]
+halo2derive = {path = "derive", version="0.1.0"}
 blst = { version = "0.3.13", default-features = true }
 rand_core = "0.6"
 ff = "0.13"
@@ -22,6 +23,7 @@ group = { version = "0.13", features = ["tests"] }
 pairing_lib = { version = "0.23", package = "pairing" }
 subtle = "2.2.1"
 rand = "0.8"
+bitvec = "1.0.1"
 
 pasta_curves = "0.5.0"
 halo2curves = { version = "0.7.0" }
