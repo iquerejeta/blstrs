@@ -917,7 +917,7 @@ impl CurveExt for G1Projective {
     }
 
     fn hash_to_curve<'a>(domain_prefix: &'a str) -> Box<dyn Fn(&[u8]) -> Self + 'a> {
-        todo!()
+        Box::new(move |message| Self::hash_to_curve(message, domain_prefix.as_ref(), b"BLS12381G1_XMD:SHA-256_SSWU_RO_"))
     }
 
     fn is_on_curve(&self) -> Choice {
