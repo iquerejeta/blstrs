@@ -20,8 +20,8 @@ use pasta_curves::arithmetic::{Coordinates, CurveAffine, CurveExt};
 use rand_core::RngCore;
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
-use crate::{fp::Fp, Bls12, Engine, G2Affine, Gt, PairingCurveAffine, Scalar};
 use crate::fp::ZETA_BASE;
+use crate::{fp::Fp, Bls12, Engine, G2Affine, Gt, PairingCurveAffine, Scalar};
 
 /// This is an element of $\mathbb{G}_1$ represented in the affine coordinate space.
 /// It is ideal to keep elements in this representation to reduce memory usage and
@@ -34,7 +34,9 @@ const COMPRESSED_SIZE: usize = 48;
 const UNCOMPRESSED_SIZE: usize = 96;
 
 pub const A: Fp = Fp::ZERO;
-pub const B: Fp = Fp(blst_fp {l:[4, 0, 0, 0, 0, 0]});
+pub const B: Fp = Fp(blst_fp {
+    l: [4, 0, 0, 0, 0, 0],
+});
 
 impl fmt::Debug for G1Affine {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -917,7 +919,13 @@ impl CurveExt for G1Projective {
     }
 
     fn hash_to_curve<'a>(domain_prefix: &'a str) -> Box<dyn Fn(&[u8]) -> Self + 'a> {
-        Box::new(move |message| Self::hash_to_curve(message, domain_prefix.as_ref(), b"BLS12381G1_XMD:SHA-256_SSWU_RO_"))
+        Box::new(move |message| {
+            Self::hash_to_curve(
+                message,
+                domain_prefix.as_ref(),
+                b"BLS12381G1_XMD:SHA-256_SSWU_RO_",
+            )
+        })
     }
 
     fn is_on_curve(&self) -> Choice {
@@ -940,7 +948,7 @@ impl CurveExt for G1Projective {
         let p = G1Projective::from_raw_unchecked(
             p_x,
             Fp::conditional_select(&p_y, &Fp::ONE, z.is_zero()),
-            z
+            z,
         );
         CtOption::new(p, p.is_on_curve())
     }
@@ -961,8 +969,7 @@ impl CurveAffine for G1Affine {
     }
 
     fn is_on_curve(&self) -> Choice {
-        (self.y().square() - self.x().square() * self.x()).ct_eq(&B)
-            | self.is_identity()
+        (self.y().square() - self.x().square() * self.x()).ct_eq(&B) | self.is_identity()
     }
 
     fn a() -> Self::Base {
@@ -973,7 +980,6 @@ impl CurveAffine for G1Affine {
         B
     }
 }
-
 
 //////// SERDE IMPLEMENTATION ///////////////
 impl SerdeObject for G1Affine {
@@ -1503,22 +1509,18 @@ mod tests {
     #[test]
     fn test_projective_scalar_multiplication() {
         let g = G1Projective::generator();
-        let a = Scalar(blst::blst_fr {
-            l: [
-                0x2b568297a56da71c,
-                0xd8c39ecb0ef375d1,
-                0x435c38da67bfbf96,
-                0x8088a05026b659b2,
-            ],
-        });
-        let b = Scalar(blst_fr {
-            l: [
-                0x785fdd9b26ef8b85,
-                0xc997f25837695c18,
-                0x4c8dbc39e7b756c1,
-                0x70d9b6cc6d87df20,
-            ],
-        });
+        let a = Scalar::from_raw([
+            0x2b568297a56da71c,
+            0xd8c39ecb0ef375d1,
+            0x435c38da67bfbf96,
+            0x8088a05026b659b2,
+        ]);
+        let b = Scalar::from_raw([
+            0x785fdd9b26ef8b85,
+            0xc997f25837695c18,
+            0x4c8dbc39e7b756c1,
+            0x70d9b6cc6d87df20,
+        ]);
         let c = a * b;
 
         assert_eq!((g * a) * b, g * c);
@@ -1527,22 +1529,18 @@ mod tests {
     #[test]
     fn test_affine_scalar_multiplication() {
         let g = G1Affine::generator();
-        let a = Scalar(blst::blst_fr {
-            l: [
-                0x2b568297a56da71c,
-                0xd8c39ecb0ef375d1,
-                0x435c38da67bfbf96,
-                0x8088a05026b659b2,
-            ],
-        });
-        let b = Scalar(blst::blst_fr {
-            l: [
-                0x785fdd9b26ef8b85,
-                0xc997f25837695c18,
-                0x4c8dbc39e7b756c1,
-                0x70d9b6cc6d87df20,
-            ],
-        });
+        let a = Scalar::from_raw([
+            0x2b568297a56da71c,
+            0xd8c39ecb0ef375d1,
+            0x435c38da67bfbf96,
+            0x8088a05026b659b2,
+        ]);
+        let b = Scalar::from_raw([
+            0x785fdd9b26ef8b85,
+            0xc997f25837695c18,
+            0x4c8dbc39e7b756c1,
+            0x70d9b6cc6d87df20,
+        ]);
         let c = a * b;
 
         assert_eq!(G1Affine::from(g * a) * b, g * c);

@@ -7,9 +7,10 @@ use core::{
     cmp, fmt,
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
-use std::ops::Deref;
-use ff::{Field, PrimeField, WithSmallOrderMulGroup};
+use ff::{Field, PrimeField, PrimeFieldBits, WithSmallOrderMulGroup};
 use rand_core::RngCore;
+use std::convert::TryInto;
+use std::ops::Deref;
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
 use crate::fp2::Fp2;
@@ -767,7 +768,7 @@ impl PrimeField for Fp {
     }
 
     const MODULUS: &'static str = "0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab";
-    const NUM_BITS: u32 = 32;
+    const NUM_BITS: u32 = 48;
     const CAPACITY: u32 = 0;
     const TWO_INV: Self = TWO_INV;
     const MULTIPLICATIVE_GENERATOR: Self = MULTIPLICATIVE_GENERATOR;
@@ -781,6 +782,35 @@ impl WithSmallOrderMulGroup<3> for Fp {
     const ZETA: Self = ZETA_BASE;
 }
 
+impl PrimeFieldBits for Fp {
+    type ReprBits = [u64; 6];
+
+    fn to_le_bits(&self) -> ff::FieldBits<Self::ReprBits> {
+        let bytes: [u8; 48] = self.to_repr().0;
+
+        const STEP: usize = 8;
+
+        let limbs = (0..6)
+            .map(|off| u64::from_le_bytes(bytes[off * STEP..(off + 1) * STEP].try_into().unwrap()))
+            .collect::<Vec<_>>();
+
+        ff::FieldBits::new(limbs.try_into().unwrap())
+    }
+
+    fn char_le_bits() -> ff::FieldBits<Self::ReprBits> {
+        // Hardcoded limbs of modulus
+        let hex = |a: &str| u64::from_str_radix(a, 16).unwrap();
+        let modulus_limbs = [
+            hex("0xb9feffffffffaaab"),
+            hex("0x1eabfffeb153ffff"),
+            hex("0x6730d2a0f6b0f624"),
+            hex("0x64774b84f38512bf"),
+            hex("0x4b1ba7b6434bacd7"),
+            hex("0x1a0111ea397fe69a"),
+        ];
+        ff::FieldBits::new(modulus_limbs)
+    }
+}
 
 #[cfg(test)]
 mod tests {

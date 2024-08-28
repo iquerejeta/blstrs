@@ -22,7 +22,7 @@ use pasta_curves::arithmetic::{Coordinates, CurveAffine, CurveExt};
 use rand_core::RngCore;
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
-use crate::{fp2::Fp2, Bls12, Engine, G1Affine, Gt, PairingCurveAffine, Scalar, fp::Fp};
+use crate::{fp::Fp, fp2::Fp2, Bls12, Engine, G1Affine, Gt, PairingCurveAffine, Scalar};
 
 /// This is an element of $\mathbb{G}_2$ represented in the affine coordinate space.
 /// It is ideal to keep elements in this representation to reduce memory usage and
@@ -877,7 +877,6 @@ impl ConstantTimeEq for G2Projective {
 #[derive(Copy, Clone)]
 pub struct Fp2Repr([u8; 96]);
 
-
 impl Default for Fp2Repr {
     fn default() -> Self {
         Self([0u8; 96])
@@ -914,51 +913,57 @@ impl PrimeField for Fp2 {
     type Repr = Fp2Repr;
     const MODULUS: &'static str = <Fp as PrimeField>::MODULUS;
     const MULTIPLICATIVE_GENERATOR: Self = Fp2::new(Fp::MULTIPLICATIVE_GENERATOR, Fp::ZERO);
-const NUM_BITS: u32 = Fp::NUM_BITS;
-const CAPACITY: u32 = Fp::NUM_BITS;
-const S: u32 = Fp::S;
+    const NUM_BITS: u32 = Fp::NUM_BITS;
+    const CAPACITY: u32 = Fp::NUM_BITS;
+    const S: u32 = Fp::S;
 
-// TODO: Check that we can just 0 this and forget.
-const ROOT_OF_UNITY: Self = Fp2::ZERO;
-const ROOT_OF_UNITY_INV: Self = Fp2::ZERO;
-const DELTA: Self = Fp2::ZERO;
+    // TODO: Check that we can just 0 this and forget.
+    const ROOT_OF_UNITY: Self = Fp2::ZERO;
+    const ROOT_OF_UNITY_INV: Self = Fp2::ZERO;
+    const DELTA: Self = Fp2::ZERO;
 
-const TWO_INV: Self = Fp2::new(Fp::TWO_INV, Fp::ZERO);
+    const TWO_INV: Self = Fp2::new(Fp::TWO_INV, Fp::ZERO);
 
-fn from_repr(repr: Self::Repr) -> CtOption<Self> {
-    let c0: [u8; 48] = repr[..48].try_into().unwrap();
-    let c0: <Fp as PrimeField>::Repr = c0.into();
-    let c0 = Fp::from_repr(c0);
+    fn from_repr(repr: Self::Repr) -> CtOption<Self> {
+        let c0: [u8; 48] = repr[..48].try_into().unwrap();
+        let c0: <Fp as PrimeField>::Repr = c0.into();
+        let c0 = Fp::from_repr(c0);
 
-    let c1: [u8; 48] = repr[48..].try_into().unwrap();
-    let c1: <Fp as PrimeField>::Repr = c1.into();
-    let c1 = Fp::from_repr(c1);
+        let c1: [u8; 48] = repr[48..].try_into().unwrap();
+        let c1: <Fp as PrimeField>::Repr = c1.into();
+        let c1 = Fp::from_repr(c1);
 
-    CtOption::new(Fp2::new(c0.unwrap(), c1.unwrap()), Choice::from(1))
-}
+        CtOption::new(Fp2::new(c0.unwrap(), c1.unwrap()), Choice::from(1))
+    }
 
-fn to_repr(&self) -> Self::Repr {
-    let mut res = Self::Repr::default();
-    let c0 = self.c0().to_repr();
-    let c1 = self.c1().to_repr();
-    res[0..48].copy_from_slice(&c0.as_ref()[..]);
-    res[48..48 * 2].copy_from_slice(&c1.as_ref()[..]);
-    res
-}
+    fn to_repr(&self) -> Self::Repr {
+        let mut res = Self::Repr::default();
+        let c0 = self.c0().to_repr();
+        let c1 = self.c1().to_repr();
+        res[0..48].copy_from_slice(c0.as_ref());
+        res[48..48 * 2].copy_from_slice(c1.as_ref());
+        res
+    }
 
-fn is_odd(&self) -> Choice {
-    Choice::from(self.to_repr().as_ref()[0] & 1)
-}
+    fn is_odd(&self) -> Choice {
+        Choice::from(self.to_repr().as_ref()[0] & 1)
+    }
 }
 
 impl WithSmallOrderMulGroup<3> for Fp2 {
-const ZETA: Self = todo!(); // Fp2::new(Fp::ZETA.mul(Fp::ZETA), Fp::ZERO);
+    const ZETA: Self = todo!(); // Fp2::new(Fp::ZETA.mul(Fp::ZETA), Fp::ZERO);
 }
 
-const G2_B: Fp2 = Fp2 (blst_fp2{ fp: [
-    blst_fp { l: [4, 0, 0, 0, 0, 0] },
-    blst_fp { l: [4, 0, 0, 0, 0, 0] },
-] });
+const G2_B: Fp2 = Fp2(blst_fp2 {
+    fp: [
+        blst_fp {
+            l: [4, 0, 0, 0, 0, 0],
+        },
+        blst_fp {
+            l: [4, 0, 0, 0, 0, 0],
+        },
+    ],
+});
 
 const G2_A: Fp2 = Fp2::ZERO;
 
@@ -1008,7 +1013,7 @@ impl CurveExt for G2Projective {
         let p = G2Projective::from_raw_unchecked(
             p_x,
             Fp2::conditional_select(&p_y, &Fp2::ONE, z.is_zero()),
-            z
+            z,
         );
         CtOption::new(p, p.is_on_curve())
     }
