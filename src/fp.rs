@@ -756,11 +756,11 @@ impl PrimeField for Fp {
     type Repr = FpRepr;
 
     fn from_repr(repr: Self::Repr) -> CtOption<Self> {
-        Fp::from_bytes_be(&repr)
+        Fp::from_bytes_le(&repr)
     }
 
     fn to_repr(&self) -> Self::Repr {
-        FpRepr(self.to_bytes_be())
+        FpRepr(self.to_bytes_le())
     }
 
     fn is_odd(&self) -> Choice {
