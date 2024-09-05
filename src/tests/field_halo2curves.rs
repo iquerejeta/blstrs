@@ -372,7 +372,7 @@ macro_rules! field_testing_suite {
             if $field::S != 0 {
                 assert_eq!(
                     $field::ROOT_OF_UNITY.pow_vartime([1 << $field::S]),
-                    $field::one()
+                    $field::ONE
                 );
                 assert_eq!(
                     $field::DELTA,
@@ -412,7 +412,7 @@ macro_rules! field_testing_suite {
                 assert!(a == b || a == negb);
             }
 
-            let mut c = $field::one();
+            let mut c = $field::ONE;
             for _ in 0..10000 {
                 let mut b = c;
                 b = b.square();
@@ -426,7 +426,7 @@ macro_rules! field_testing_suite {
 
                 assert_eq!(b, c);
 
-                c += &$field::one();
+                c += &$field::ONE;
             }
         }
     };
