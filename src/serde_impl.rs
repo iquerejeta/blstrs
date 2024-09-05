@@ -124,8 +124,8 @@ impl Serialize for Scalar {
 
 impl<'de> Deserialize<'de> for Scalar {
     fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
-        let deser = <[u8; 32]>::deserialize(d)?;
-        match Scalar::from_bytes_le(&deser).into() {
+        let deser = <[u64; 4]>::deserialize(d)?;
+        match Scalar::from_u64s_le(&deser).into() {
             Some(scalar) => Ok(scalar),
             None => Err(D::Error::custom(ERR_CODE)),
         }
