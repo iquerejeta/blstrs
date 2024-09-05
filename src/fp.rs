@@ -652,6 +652,7 @@ impl Fp {
     }
 
     pub fn is_quad_res(&self) -> Choice {
+        // TODO: Use Legendre!!
         self.sqrt().is_some()
     }
 

@@ -597,6 +597,12 @@ impl Scalar {
         CtOption::new(Scalar(out), is_some)
     }
 
+    // /// Constructs an element of `Scalar` from a little-endian array of limbs without checking that it
+    // /// is canonical and without converting it to Montgomery form (i.e. without multiplying by `R`).
+    // pub fn from_raw_unchecked(l: [u64; 4]) -> {
+    //     Scalar(blst_fr { l })
+    // }
+
     #[allow(clippy::match_like_matches_macro)]
     pub fn is_quad_res(&self) -> Choice {
         match self.legendre() {
@@ -695,6 +701,96 @@ impl ec_gpu::GpuField for Scalar {
         crate::u64_to_u32(&MODULUS[..])
     }
 }
+
+/// Halo2Curves compatibility ///
+// impl Scalar {
+//     pub fn char() -> [u8; 48] {
+//         MODULUS_REPR
+//     }
+
+//     /// Attempts to convert a little-endian byte representation of
+//     /// a scalar into an `Scalar`, failing if the input is not canonical.
+//     pub fn from_bytes_le(bytes: &[u8; 32]) -> CtOption<Scalar> {
+//         // TODO: constant time
+//         let is_some = Choice::from(is_valid(bytes) as u8);
+//         let mut out = blst_fr::default();
+//         unsafe { blst_fr_from_lendian(&mut out, bytes.as_ptr()) };
+
+//         CtOption::new(Scalar(out), is_some)
+//     }
+
+//     /// Attempts to convert a big-endian byte representation of
+//     /// a scalar into an `Scalar`, failing if the input is not canonical.
+//     pub fn from_bytes_be(be_bytes: &[u8; 48]) -> CtOption<Scalar> {
+//         let mut le_bytes = *be_bytes;
+//         le_bytes.reverse();
+//         Self::from_bytes_le(&le_bytes)
+//     }
+
+//     /// Converts an element of `Scalar` into a byte representation in
+//     /// little-endian byte order.
+//     pub fn to_bytes_le(&self) -> [u8; 48] {
+//         let mut repr = [0u8; 48];
+//         unsafe { blst_lendian_from_fr(repr.as_mut_ptr(), &self.0) };
+//         repr
+//     }
+
+//     /// Converts an element of `Scalar` into a byte representation in
+//     /// big-endian byte order.
+//     pub fn to_bytes_be(&self) -> [u8; 48] {
+//         let mut bytes = self.to_bytes_le();
+//         bytes.reverse();
+//         bytes
+//     }
+
+//     /// Constructs an element of `Scalar` from a little-endian array of limbs without checking that it
+//     /// is canonical and without converting it to Montgomery form (i.e. without multiplying by `R`).
+//     pub fn from_raw_unchecked(l: [u64; 4]) -> Scalar {
+//         Scalar(blst_fr { l })
+//     }
+
+//     /// Multiplies `self` with `3`, returning the result.
+//     pub fn mul3(&self) -> Self {
+//         let mut out = *self;
+//         unsafe { blst_fr_mul_by_3(&mut out.0, &self.0) };
+//         out
+//     }
+
+//     /// Multiplies `self` with `8`, returning the result.
+//     pub fn mul8(&self) -> Self {
+//         let mut out = *self;
+//         unsafe { blst_fr_mul_by_8(&mut out.0, &self.0) };
+//         out
+//     }
+
+//     /// Left shift `self` by `count`, returning the result.
+//     pub fn shl(&self, count: usize) -> Self {
+//         let mut out = *self;
+//         unsafe { blst_fr_lshift(&mut out.0, &self.0, count) };
+//         out
+//     }
+
+//     // `u64s` represent a little-endian non-Montgomery form integer mod p.
+//     pub fn from_u64s_le(bytes: &[u64; 4]) -> CtOption<Self> {
+//         let is_some = Choice::from(is_valid_u64(bytes) as u8);
+//         let mut out = blst_fr::default();
+//         unsafe { blst_fr_from_uint64(&mut out, bytes.as_ptr()) };
+//         CtOption::new(Scalar(out), is_some)
+//     }
+
+//     // pub fn num_bits(&self) -> u32 {
+//     //     let mut ret = 256;
+//     //     for i in self.to_bytes_be().iter() {
+//     //         let leading = i.leading_zeros();
+//     //         ret -= leading;
+//     //         if leading != 8 {
+//     //             break;
+//     //         }
+//     //     }
+
+//     //     ret
+//     // }
+// }
 
 #[cfg(test)]
 mod tests {
