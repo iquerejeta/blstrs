@@ -651,9 +651,20 @@ impl Fp {
         ret
     }
 
-    pub fn is_quad_res(&self) -> Choice {
-        // TODO: Use Legendre!!
-        self.sqrt().is_some()
+    // Returns the Jacobi symbol, where the numerator and denominator
+    // are the element and the characteristic of the field, respectively.
+    // The Jacobi symbol is applicable to odd moduli
+    // while the Legendre symbol is applicable to prime moduli.
+    // They are equivalent for prime moduli.
+    #[inline(always)]
+    fn jacobi(&self) -> i64 {
+        let mut res = [0u64; 6];
+        let bytes = self.to_bytes_le();
+        res.iter_mut().enumerate().for_each(|(i, limb)| {
+            let off = i * 8;
+            *limb = u64::from_le_bytes(bytes[off..off + 8].try_into().unwrap());
+        });
+        halo2curves::ff_ext::jacobi::jacobi::<7>(&res, &MODULUS)
     }
 
     #[inline]
@@ -727,12 +738,12 @@ impl AsMut<[u8]> for FpRepr {
 // L=(k^3-1).roots();L
 pub const ZETA_BASE: Fp = Fp(blst_fp {
     l: [
-        0x30f1361b798a64e8,
-        0xf3b8ddab7ece5a2a,
-        0x16a8ca3ac61577f7,
-        0xc26a2ff874fd029b,
-        0x3636b76660701c6e,
-        0x51ba4ab241b6160,
+        0x30f1_361b_798a_64e8,
+        0xf3b8_ddab_7ece_5a2a,
+        0x16a8_ca3a_c615_77f7,
+        0xc26a_2ff8_74fd_029b,
+        0x3636_b766_6070_1c6e,
+        0x051b_a4ab_241b_6160,
     ],
 });
 
@@ -748,10 +759,30 @@ const TWO_INV: Fp = Fp(blst_fp {
     ],
 });
 
-/// Computed using sage, GF(0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab).primitive_element()
-const MULTIPLICATIVE_GENERATOR: Fp = Fp(blst_fp {
-    l: [0x02, 0x00, 0x00, 0x00, 0x00, 0x00],
+/// GENERATOR = 2.
+/// Montgomery form:
+/// 0x11ebab9dbb81e28c6cf28d7901622c038b256521ed1f9bcb57605e0db0ddbb51b93c0018d6c40005321300000006554f
+
+const GENERATOR: Fp = Fp(blst_fp {
+    l: [
+        0x3213_0000_0006_554f,
+        0xb93c_0018_d6c4_0005,
+        0x5760_5e0d_b0dd_bb51,
+        0x8b25_6521_ed1f_9bcb,
+        0x6cf2_8d79_0162_2c03,
+        0x11eb_ab9d_bb81_e28c,
+    ],
 });
+
+impl halo2curves::ff_ext::Legendre for Fp {
+    #[inline(always)]
+    fn legendre(&self) -> i64 {
+        self.jacobi()
+    }
+}
+impl WithSmallOrderMulGroup<3> for Fp {
+    const ZETA: Self = ZETA_BASE;
+}
 
 impl PrimeField for Fp {
     type Repr = FpRepr;
@@ -769,18 +800,16 @@ impl PrimeField for Fp {
     }
 
     const MODULUS: &'static str = "0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab";
-    const NUM_BITS: u32 = 48;
-    const CAPACITY: u32 = 0;
+    const NUM_BITS: u32 = 381;
+    const CAPACITY: u32 = Self::NUM_BITS - 1;
     const TWO_INV: Self = TWO_INV;
-    const MULTIPLICATIVE_GENERATOR: Self = MULTIPLICATIVE_GENERATOR;
+    const MULTIPLICATIVE_GENERATOR: Self = GENERATOR;
     const S: u32 = 0;
-    const ROOT_OF_UNITY: Self = Fp::ZERO;
-    const ROOT_OF_UNITY_INV: Self = Fp::ZERO;
-    const DELTA: Self = Fp::ZERO;
-}
 
-impl WithSmallOrderMulGroup<3> for Fp {
-    const ZETA: Self = ZETA_BASE;
+    // These constants are not needed for the base field.
+    const ROOT_OF_UNITY: Self = Fp::ONE;
+    const ROOT_OF_UNITY_INV: Self = Fp::ONE;
+    const DELTA: Self = Fp::ZERO;
 }
 
 impl PrimeFieldBits for Fp {
@@ -816,10 +845,6 @@ impl PrimeFieldBits for Fp {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    use ff::Field;
-    use rand_core::SeedableRng;
-    use rand_xorshift::XorShiftRng;
 
     #[test]
     fn test_fp_neg_one() {
@@ -1538,4 +1563,15 @@ mod tests {
         assert_eq!(a.invert().unwrap(), b);
         assert!(bool::from(Fp::ZERO.invert().is_none()));
     }
+
+    crate::field_testing_suite!(Fp, "field_arithmetic");
+    crate::field_testing_suite!(Fp, "conversion");
+    // crate::field_testing_suite!(Fp, "serialization");
+    crate::field_testing_suite!(Fp, "quadratic_residue");
+    crate::field_testing_suite!(Fp, "bits");
+    // crate::field_testing_suite!(Fp, "serialization_check");
+    crate::field_testing_suite!(Fp, "constants");
+    crate::field_testing_suite!(Fp, "sqrt");
+    crate::field_testing_suite!(Fp, "zeta");
+    // crate::field_testing_suite!(Fp, "from_uniform_bytes", 64);
 }

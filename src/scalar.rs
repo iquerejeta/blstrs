@@ -1,4 +1,4 @@
-//! An implementation of the BLS12-381 scalar field $\mathbb{F}_q$
+//! An implementation of the BLS12-381 scalar field $\mathbb{F}_qScalar $
 //! where `q = 0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001`
 
 use core::{
@@ -12,7 +12,7 @@ use core::{
 
 use blst::*;
 use byte_slice_cast::AsByteSlice;
-use ff::{Field, FieldBits, PrimeField, PrimeFieldBits};
+use ff::{Field, FieldBits, PrimeField, PrimeFieldBits, WithSmallOrderMulGroup};
 use rand_core::RngCore;
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
@@ -35,7 +35,6 @@ const GENERATOR: Scalar = Scalar(blst_fr {
 });
 
 // Little-endian non-Montgomery form not reduced mod p.
-#[allow(dead_code)]
 const MODULUS: [u64; 4] = [
     0xffff_ffff_0000_0001,
     0x53bd_a402_fffe_5bfe,
@@ -92,13 +91,25 @@ const R: Scalar = Scalar(blst_fr {
 ///
 /// sage> mod(2^512, 0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001)
 /// sage> 0x748d9d99f59ff1105d314967254398f2b6cedcb87925c23c999e990f3f29c6d
-#[allow(dead_code)]
 const R2: Scalar = Scalar(blst_fr {
     l: [
         0xc999_e990_f3f2_9c6d,
         0x2b6c_edcb_8792_5c23,
         0x05d3_1496_7254_398f,
         0x0748_d9d9_9f59_ff11,
+    ],
+});
+
+/// `R^3 = 2^768 mod q` in little-endian Montgomery form.
+///
+// sage> hex(mod(2^768, 0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001))
+// sage> 0x6e2a5bb9c8db33e973d13c71c7b5f4181b3e0d188cf06990c62c1807439b73af
+const R3: Scalar = Scalar(blst_fr {
+    l: [
+        0xc62c_1807_439b_73af,
+        0x1b3e_0d18_8cf0_6990,
+        0x73d1_3c71_c7b5_f418,
+        0x6e2a_5bb9_c8db_33e9,
     ],
 });
 
@@ -545,6 +556,50 @@ impl PrimeFieldBits for Scalar {
     }
 }
 
+impl WithSmallOrderMulGroup<3> for Scalar {
+    // Montgomery form of the third root of unity
+    const ZETA: Self = Scalar(blst_fr {
+        l: [
+            0x92d9_090b_0930_11d2,
+            0xfc9c_bd71_9d6a_a073,
+            0xc1f1_4ef0_cd65_a1a6,
+            0x017f_6d35_e72f_cdeb,
+        ],
+    });
+}
+
+impl ff::FromUniformBytes<64> for Scalar {
+    fn from_uniform_bytes(bytes: &[u8; 64]) -> Self {
+        let mut wide = [0u8; 64];
+        wide[..64].copy_from_slice(bytes);
+        let (a0, a1) = wide.split_at(32);
+
+        let a0: [u64; 4] = (0..4)
+            .map(|off| u64::from_le_bytes(a0[off * 8..(off + 1) * 8].try_into().unwrap()))
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
+        let a0 = Scalar(blst_fr { l: a0 });
+
+        let a1: [u64; 4] = (0..4)
+            .map(|off| u64::from_le_bytes(a1[off * 8..(off + 1) * 8].try_into().unwrap()))
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
+        let a1 = Scalar(blst_fr { l: a1 });
+
+        // enforce non assembly impl since asm is likely to be optimized for sparse fields
+        a0.mul(R2) + a1.mul(R3)
+    }
+}
+
+impl halo2curves::ff_ext::Legendre for Scalar {
+    #[inline(always)]
+    fn legendre(&self) -> i64 {
+        self.jacobi()
+    }
+}
+
 impl Scalar {
     /// Attempts to convert a little-endian byte representation of
     /// a scalar into a `Scalar`, failing if the input is not canonical.
@@ -597,36 +652,20 @@ impl Scalar {
         CtOption::new(Scalar(out), is_some)
     }
 
-    // /// Constructs an element of `Scalar` from a little-endian array of limbs without checking that it
-    // /// is canonical and without converting it to Montgomery form (i.e. without multiplying by `R`).
-    // pub fn from_raw_unchecked(l: [u64; 4]) -> {
-    //     Scalar(blst_fr { l })
-    // }
-
-    #[allow(clippy::match_like_matches_macro)]
-    pub fn is_quad_res(&self) -> Choice {
-        match self.legendre() {
-            0 | 1 => Choice::from(1u8),
-            _ => Choice::from(0u8),
-        }
-    }
-
-    pub fn legendre(&self) -> i8 {
-        const MOD_MINUS_1_OVER_2: [u64; 4] = [
-            0x7fffffff80000000,
-            0xa9ded2017fff2dff,
-            0x199cec0404d0ec02,
-            0x39f6d3a994cebea4,
-        ];
-        // s = self^((modulus - 1) // 2)
-        let s = self.pow_vartime(MOD_MINUS_1_OVER_2);
-        if s == Self::ZERO {
-            0
-        } else if s == Self::ONE {
-            1
-        } else {
-            -1
-        }
+    // Returns the Jacobi symbol, where the numerator and denominator
+    // are the element and the characteristic of the field, respectively.
+    // The Jacobi symbol is applicable to odd moduli
+    // while the Legendre symbol is applicable to prime moduli.
+    // They are equivalent for prime moduli.
+    #[inline(always)]
+    fn jacobi(&self) -> i64 {
+        let mut res = [0u64; 4];
+        let bytes = self.to_bytes_le();
+        res.iter_mut().enumerate().for_each(|(i, limb)| {
+            let off = i * 8;
+            *limb = u64::from_le_bytes(bytes[off..off + 8].try_into().unwrap());
+        });
+        halo2curves::ff_ext::jacobi::jacobi::<5>(&res, &MODULUS)
     }
 
     pub fn char() -> <Self as PrimeField>::Repr {
@@ -702,102 +741,11 @@ impl ec_gpu::GpuField for Scalar {
     }
 }
 
-/// Halo2Curves compatibility ///
-// impl Scalar {
-//     pub fn char() -> [u8; 48] {
-//         MODULUS_REPR
-//     }
-
-//     /// Attempts to convert a little-endian byte representation of
-//     /// a scalar into an `Scalar`, failing if the input is not canonical.
-//     pub fn from_bytes_le(bytes: &[u8; 32]) -> CtOption<Scalar> {
-//         // TODO: constant time
-//         let is_some = Choice::from(is_valid(bytes) as u8);
-//         let mut out = blst_fr::default();
-//         unsafe { blst_fr_from_lendian(&mut out, bytes.as_ptr()) };
-
-//         CtOption::new(Scalar(out), is_some)
-//     }
-
-//     /// Attempts to convert a big-endian byte representation of
-//     /// a scalar into an `Scalar`, failing if the input is not canonical.
-//     pub fn from_bytes_be(be_bytes: &[u8; 48]) -> CtOption<Scalar> {
-//         let mut le_bytes = *be_bytes;
-//         le_bytes.reverse();
-//         Self::from_bytes_le(&le_bytes)
-//     }
-
-//     /// Converts an element of `Scalar` into a byte representation in
-//     /// little-endian byte order.
-//     pub fn to_bytes_le(&self) -> [u8; 48] {
-//         let mut repr = [0u8; 48];
-//         unsafe { blst_lendian_from_fr(repr.as_mut_ptr(), &self.0) };
-//         repr
-//     }
-
-//     /// Converts an element of `Scalar` into a byte representation in
-//     /// big-endian byte order.
-//     pub fn to_bytes_be(&self) -> [u8; 48] {
-//         let mut bytes = self.to_bytes_le();
-//         bytes.reverse();
-//         bytes
-//     }
-
-//     /// Constructs an element of `Scalar` from a little-endian array of limbs without checking that it
-//     /// is canonical and without converting it to Montgomery form (i.e. without multiplying by `R`).
-//     pub fn from_raw_unchecked(l: [u64; 4]) -> Scalar {
-//         Scalar(blst_fr { l })
-//     }
-
-//     /// Multiplies `self` with `3`, returning the result.
-//     pub fn mul3(&self) -> Self {
-//         let mut out = *self;
-//         unsafe { blst_fr_mul_by_3(&mut out.0, &self.0) };
-//         out
-//     }
-
-//     /// Multiplies `self` with `8`, returning the result.
-//     pub fn mul8(&self) -> Self {
-//         let mut out = *self;
-//         unsafe { blst_fr_mul_by_8(&mut out.0, &self.0) };
-//         out
-//     }
-
-//     /// Left shift `self` by `count`, returning the result.
-//     pub fn shl(&self, count: usize) -> Self {
-//         let mut out = *self;
-//         unsafe { blst_fr_lshift(&mut out.0, &self.0, count) };
-//         out
-//     }
-
-//     // `u64s` represent a little-endian non-Montgomery form integer mod p.
-//     pub fn from_u64s_le(bytes: &[u64; 4]) -> CtOption<Self> {
-//         let is_some = Choice::from(is_valid_u64(bytes) as u8);
-//         let mut out = blst_fr::default();
-//         unsafe { blst_fr_from_uint64(&mut out, bytes.as_ptr()) };
-//         CtOption::new(Scalar(out), is_some)
-//     }
-
-//     // pub fn num_bits(&self) -> u32 {
-//     //     let mut ret = 256;
-//     //     for i in self.to_bytes_be().iter() {
-//     //         let leading = i.leading_zeros();
-//     //         ret -= leading;
-//     //         if leading != 8 {
-//     //             break;
-//     //         }
-//     //     }
-
-//     //     ret
-//     // }
-// }
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    use rand_core::SeedableRng;
-    use rand_xorshift::XorShiftRng;
+    use halo2curves::ff_ext::Legendre;
 
     /// INV = -(q^{-1} mod 2^64) mod 2^64
     const INV: u64 = 0xfffffffeffffffff;
@@ -1263,7 +1211,7 @@ mod tests {
             0x3a6b21fb03867191,
         ])
         .unwrap();
-        assert!(bool::from(e.is_quad_res()));
+        assert!(bool::from(e.ct_quadratic_residue()));
 
         let e = Scalar::from_u64s_le(&[
             0x96341aefd047c045,
@@ -1272,7 +1220,7 @@ mod tests {
             0x31d9cd545c0ec7c6,
         ])
         .unwrap();
-        assert!(!bool::from(e.is_quad_res()));
+        assert!(!bool::from(e.ct_quadratic_residue()));
     }
 
     #[test]
@@ -1851,7 +1799,9 @@ mod tests {
             Scalar::ROOT_OF_UNITY.pow_vartime([1 << Scalar::S]),
             Scalar::ONE
         );
-        assert!(!bool::from(Scalar::MULTIPLICATIVE_GENERATOR.is_quad_res()));
+        assert!(!bool::from(
+            Scalar::MULTIPLICATIVE_GENERATOR.ct_quadratic_residue()
+        ));
     }
 
     #[test]
@@ -1984,4 +1934,14 @@ mod tests {
         }
         assert_eq!(0, yep_bad.len());
     }
+
+    crate::field_testing_suite!(Scalar, "field_arithmetic");
+    crate::field_testing_suite!(Scalar, "conversion");
+    crate::field_testing_suite!(Scalar, "quadratic_residue");
+    crate::field_testing_suite!(Scalar, "bits");
+    // crate::field_testing_suite!(Scalar, "serialization_check");
+    crate::field_testing_suite!(Scalar, "constants");
+    crate::field_testing_suite!(Scalar, "sqrt");
+    crate::field_testing_suite!(Scalar, "zeta");
+    crate::field_testing_suite!(Scalar, "from_uniform_bytes", 64);
 }
