@@ -15,7 +15,6 @@ rust-version = "1.63"
 rustdoc-args = [ "--html-in-header", "katex-header.html" ]
 
 [dependencies]
-# halo2derive = {path = "derive", version="0.1.0"}
 blst = { version = "0.3.13", default-features = true }
 rand_core = "0.6"
 ff = "0.13"
