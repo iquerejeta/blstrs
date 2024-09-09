@@ -73,6 +73,9 @@ const ROOT_OF_UNITY: Scalar = Scalar(blst_fr {
 
 const ZERO: Scalar = Scalar(blst_fr { l: [0, 0, 0, 0] });
 
+/// INV = -(q^{-1} mod 2^64) mod 2^64
+const INV: u64 = 0xfffffffeffffffff;
+
 /// `R = 2^256 mod q` in little-endian Montgomery form which is equivalent to 1 in little-endian
 /// non-Montgomery form.
 ///
@@ -91,14 +94,14 @@ const R: Scalar = Scalar(blst_fr {
 ///
 /// sage> mod(2^512, 0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001)
 /// sage> 0x748d9d99f59ff1105d314967254398f2b6cedcb87925c23c999e990f3f29c6d
-const R2: Scalar = Scalar(blst_fr {
-    l: [
-        0xc999_e990_f3f2_9c6d,
-        0x2b6c_edcb_8792_5c23,
-        0x05d3_1496_7254_398f,
-        0x0748_d9d9_9f59_ff11,
-    ],
-});
+const R2_LIMBS: [u64; 4] = [
+    0xc999_e990_f3f2_9c6d,
+    0x2b6c_edcb_8792_5c23,
+    0x05d3_1496_7254_398f,
+    0x0748_d9d9_9f59_ff11,
+];
+
+const R2: Scalar = Scalar(blst_fr { l: R2_LIMBS });
 
 /// `R^3 = 2^768 mod q` in little-endian Montgomery form.
 ///
@@ -511,6 +514,115 @@ impl PrimeField for Scalar {
     const ROOT_OF_UNITY: Self = ROOT_OF_UNITY;
 }
 
+// from_raw support
+/// Subtracts another element from this element.
+#[inline]
+pub const fn sub(lhs: &[u64; 4], rhs: &[u64; 4]) -> [u64; 4] {
+    use crate::arithmetic::{adc, sbb};
+    let (d0, borrow) = sbb(lhs[0], rhs[0], 0);
+    let (d1, borrow) = sbb(lhs[1], rhs[1], borrow);
+    let (d2, borrow) = sbb(lhs[2], rhs[2], borrow);
+    let (d3, borrow) = sbb(lhs[3], rhs[3], borrow);
+
+    // If underflow occurred on the final limb, borrow = 0xfff...fff, otherwise
+    // borrow = 0x000...000. Thus, we use it as a mask to conditionally add the modulus.
+    let (d0, carry) = adc(d0, MODULUS[0] & borrow, 0);
+    let (d1, carry) = adc(d1, MODULUS[1] & borrow, carry);
+    let (d2, carry) = adc(d2, MODULUS[2] & borrow, carry);
+    let (d3, _) = adc(d3, MODULUS[3] & borrow, carry);
+
+    [d0, d1, d2, d3]
+}
+
+impl Scalar {
+    #[inline]
+    #[allow(clippy::too_many_arguments)]
+    const fn montgomery_reduce(
+        r0: u64,
+        r1: u64,
+        r2: u64,
+        r3: u64,
+        r4: u64,
+        r5: u64,
+        r6: u64,
+        r7: u64,
+    ) -> Self {
+        // The Montgomery reduction here is based on Algorithm 14.32 in
+        // Handbook of Applied Cryptography
+        // <http://cacr.uwaterloo.ca/hac/about/chap14.pdf>.
+
+        use crate::arithmetic::{adc, mac};
+        let k = r0.wrapping_mul(INV);
+        let (_, carry) = mac(r0, k, MODULUS[0], 0);
+        let (r1, carry) = mac(r1, k, MODULUS[1], carry);
+        let (r2, carry) = mac(r2, k, MODULUS[2], carry);
+        let (r3, carry) = mac(r3, k, MODULUS[3], carry);
+        let (r4, carry2) = adc(r4, 0, carry);
+
+        let k = r1.wrapping_mul(INV);
+        let (_, carry) = mac(r1, k, MODULUS[0], 0);
+        let (r2, carry) = mac(r2, k, MODULUS[1], carry);
+        let (r3, carry) = mac(r3, k, MODULUS[2], carry);
+        let (r4, carry) = mac(r4, k, MODULUS[3], carry);
+        let (r5, carry2) = adc(r5, carry2, carry);
+
+        let k = r2.wrapping_mul(INV);
+        let (_, carry) = mac(r2, k, MODULUS[0], 0);
+        let (r3, carry) = mac(r3, k, MODULUS[1], carry);
+        let (r4, carry) = mac(r4, k, MODULUS[2], carry);
+        let (r5, carry) = mac(r5, k, MODULUS[3], carry);
+        let (r6, carry2) = adc(r6, carry2, carry);
+
+        let k = r3.wrapping_mul(INV);
+        let (_, carry) = mac(r3, k, MODULUS[0], 0);
+        let (r4, carry) = mac(r4, k, MODULUS[1], carry);
+        let (r5, carry) = mac(r5, k, MODULUS[2], carry);
+        let (r6, carry) = mac(r6, k, MODULUS[3], carry);
+        let (r7, _) = adc(r7, carry2, carry);
+
+        // Result may be within MODULUS of the correct value
+        Scalar(blst_fr {
+            l: sub(&[r4, r5, r6, r7], &MODULUS),
+        })
+    }
+
+    /// Multiplies this element by another element
+    #[inline]
+    pub const fn mul_const(lhs: &[u64; 4], rhs: &[u64; 4]) -> Self {
+        // Schoolbook multiplication
+
+        use crate::arithmetic::mac;
+        let (r0, carry) = mac(0, lhs[0], rhs[0], 0);
+        let (r1, carry) = mac(0, lhs[0], rhs[1], carry);
+        let (r2, carry) = mac(0, lhs[0], rhs[2], carry);
+        let (r3, r4) = mac(0, lhs[0], rhs[3], carry);
+
+        let (r1, carry) = mac(r1, lhs[1], rhs[0], 0);
+        let (r2, carry) = mac(r2, lhs[1], rhs[1], carry);
+        let (r3, carry) = mac(r3, lhs[1], rhs[2], carry);
+        let (r4, r5) = mac(r4, lhs[1], rhs[3], carry);
+
+        let (r2, carry) = mac(r2, lhs[2], rhs[0], 0);
+        let (r3, carry) = mac(r3, lhs[2], rhs[1], carry);
+        let (r4, carry) = mac(r4, lhs[2], rhs[2], carry);
+        let (r5, r6) = mac(r5, lhs[2], rhs[3], carry);
+
+        let (r3, carry) = mac(r3, lhs[3], rhs[0], 0);
+        let (r4, carry) = mac(r4, lhs[3], rhs[1], carry);
+        let (r5, carry) = mac(r5, lhs[3], rhs[2], carry);
+        let (r6, r7) = mac(r6, lhs[3], rhs[3], carry);
+
+        Self::montgomery_reduce(r0, r1, r2, r3, r4, r5, r6, r7)
+    }
+
+    /// Converts from an integer represented in little endian
+    /// into its (congruent) `Fr` representation.
+    pub const fn from_raw(val: [u64; 4]) -> Self {
+        // (&Fr(val)).mul(&R2)
+        Self::mul_const(&val, &R2_LIMBS)
+    }
+}
+
 #[cfg(not(target_pointer_width = "64"))]
 type ReprBits = [u32; 8];
 
@@ -746,9 +858,6 @@ mod tests {
     use super::*;
 
     use halo2curves::ff_ext::Legendre;
-
-    /// INV = -(q^{-1} mod 2^64) mod 2^64
-    const INV: u64 = 0xfffffffeffffffff;
 
     const LARGEST: Scalar = Scalar(blst::blst_fr {
         l: [

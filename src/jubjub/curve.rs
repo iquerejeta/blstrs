@@ -1,7 +1,4 @@
 //! This crate provides an implementation of the **Jubjub** elliptic curve and its associated
-//! field arithmetic. See [`README.md`](https://github.com/zkcrypto/jubjub/blob/master/README.md) for more details about Jubjub.
-//!
-//! # API
 //!
 //! * `AffinePoint` / `ExtendedPoint` which are implementations of Jubjub group arithmetic
 //! * `AffineNielsPoint` / `ExtendedNielsPoint` which are pre-processed Jubjub points
@@ -441,8 +438,8 @@ impl AffinePoint {
 
     /// Converts this element into its byte representation.
     pub fn to_bytes(&self) -> [u8; 32] {
-        let mut tmp = self.v.to_bytes();
-        let u = self.u.to_bytes();
+        let mut tmp = self.v.to_bytes_le();
+        let u = self.u.to_bytes_le();
 
         // Encode the sign of the u-coordinate in the most
         // significant bit.
@@ -485,7 +482,7 @@ impl AffinePoint {
         b[31] &= 0b0111_1111;
 
         // Interpret what remains as the v-coordinate
-        Fq::from_bytes(&b).and_then(|v| {
+        Fq::from_bytes_le(&b).and_then(|v| {
             // -u^2 + v^2 = 1 + d.u^2.v^2
             // -u^2 = 1 + d.u^2.v^2 - v^2    (rearrange)
             // -u^2 - d.u^2.v^2 = 1 - v^2    (rearrange)
@@ -503,7 +500,7 @@ impl AffinePoint {
                 .sqrt()
                 .and_then(|u| {
                     // Fix the sign of `u` if necessary
-                    let flip_sign = Choice::from((u.to_bytes()[0] ^ sign) & 1);
+                    let flip_sign = Choice::from((u.to_bytes_le()[0] ^ sign) & 1);
                     let u_negated = -u;
                     let final_u = Fq::conditional_select(&u, &u_negated, flip_sign);
 
@@ -556,7 +553,7 @@ impl AffinePoint {
                 b[31] &= 0b0111_1111;
 
                 // Interpret what remains as the v-coordinate
-                Fq::from_bytes(&b).map(|v| {
+                Fq::from_bytes_le(&b).map(|v| {
                     // -u^2 + v^2 = 1 + d.u^2.v^2
                     // -u^2 = 1 + d.u^2.v^2 - v^2    (rearrange)
                     // -u^2 - d.u^2.v^2 = 1 - v^2    (rearrange)
@@ -596,7 +593,7 @@ impl AffinePoint {
                      }| {
                         (numerator * inv_denominator).sqrt().and_then(|u| {
                             // Fix the sign of `u` if necessary
-                            let flip_sign = Choice::from((u.to_bytes()[0] ^ sign) & 1);
+                            let flip_sign = Choice::from((u.to_bytes_le()[0] ^ sign) & 1);
                             let u_negated = -u;
                             let final_u = Fq::conditional_select(&u, &u_negated, flip_sign);
 
@@ -638,9 +635,9 @@ impl AffinePoint {
     /// for use in multiple additions.
     pub fn to_niels(&self) -> AffineNielsPoint {
         AffineNielsPoint {
-            v_plus_u: Fq::add(&self.v, &self.u),
-            v_minus_u: Fq::sub(&self.v, &self.u),
-            t2d: Fq::mul(&Fq::mul(&self.u, &self.v), &EDWARDS_D2),
+            v_plus_u: Fq::add(self.v, &self.u),
+            v_minus_u: Fq::sub(self.v, &self.u),
+            t2d: Fq::mul(Fq::mul(self.u, self.v), &EDWARDS_D2),
         }
     }
 
