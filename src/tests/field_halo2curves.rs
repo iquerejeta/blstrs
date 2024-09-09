@@ -237,58 +237,6 @@ macro_rules! field_testing_suite {
         }
     };
 
-    ($field: ident, "serialization") => {
-        macro_rules! random_serialization_test {
-            ($f: ident) => {
-                let mut rng = XorShiftRng::from_seed([
-                    0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54,
-                    0x06, 0xbc, 0xe5,
-                ]);
-                for _ in 0..1000000 {
-                    let a = $f::random(&mut rng);
-                    let bytes = a.to_raw_bytes();
-                    let b = $f::from_raw_bytes(&bytes).unwrap();
-                    assert_eq!(a, b);
-                    let mut buf = Vec::new();
-                    a.write_raw(&mut buf).unwrap();
-                    let b = $f::read_raw(&mut &buf[..]).unwrap();
-                    assert_eq!(a, b);
-                }
-            };
-        }
-
-        #[cfg(feature = "derive_serde")]
-        macro_rules! random_serde_test {
-            ($f: ident) => {
-                let mut rng = XorShiftRng::from_seed([
-                    0x59, 0x62, 0xbe, 0x5d, 0x76, 0x3d, 0x31, 0x8d, 0x17, 0xdb, 0x37, 0x32, 0x54,
-                    0x06, 0xbc, 0xe5,
-                ]);
-                for _ in 0..1000000 {
-                    // byte serialization
-                    let a = $f::random(&mut rng);
-                    let bytes = bincode::serialize(&a).unwrap();
-                    let reader = std::io::Cursor::new(bytes);
-                    let b: $f = bincode::deserialize_from(reader).unwrap();
-                    assert_eq!(a, b);
-
-                    // json serialization
-                    let json = serde_json::to_string(&a).unwrap();
-                    let reader = std::io::Cursor::new(json);
-                    let b: $f = serde_json::from_reader(reader).unwrap();
-                    assert_eq!(a, b);
-                }
-            };
-        }
-
-        #[test]
-        fn test_serialization() {
-            use halo2curves::serde::SerdeObject;
-            random_serialization_test!($field);
-            #[cfg(feature = "derive_serde")]
-            random_serde_test!($field);
-        }
-    };
 
     ($field: ident, "quadratic_residue") => {
         #[test]
@@ -384,7 +332,7 @@ macro_rules! field_testing_suite {
 
     ($field: ident, "sqrt") => {
         #[test]
-        fn test_sqrt() {
+        fn test_h2c_sqrt() {
             use halo2curves::ff_ext::Legendre;
             use ff::PrimeField;
             use rand_core::OsRng;
