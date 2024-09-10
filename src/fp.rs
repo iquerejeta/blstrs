@@ -50,7 +50,6 @@ const R: Fp = Fp(blst_fp {
 });
 
 /// R2 = 2^(384*2) mod p
-#[allow(dead_code)]
 const R2: Fp = Fp(blst_fp {
     l: [
         0xf4df_1f34_1c34_1746,
@@ -59,6 +58,18 @@ const R2: Fp = Fp(blst_fp {
         0x67eb_88a9_939d_83c0,
         0x9a79_3e85_b519_952d,
         0x1198_8fe5_92ca_e3aa,
+    ],
+});
+
+/// R3 = 2^(384*3) mod p
+const R3: Fp = Fp(blst_fp {
+    l: [
+        0xed48_ac6b_d94c_a1e0,
+        0x315f_831e_03a7_adf8,
+        0x9a53_352a_615e_29dd,
+        0x34c0_4e5e_921e_1761,
+        0x2512_d435_6572_4728,
+        0x0aa6_3460_9175_5d4d,
     ],
 });
 
@@ -782,6 +793,26 @@ impl halo2curves::ff_ext::Legendre for Fp {
 }
 impl WithSmallOrderMulGroup<3> for Fp {
     const ZETA: Self = ZETA_BASE;
+}
+
+impl ff::FromUniformBytes<64> for Fp {
+    fn from_uniform_bytes(bytes: &[u8; 64]) -> Self {
+        let mut wide = [0u8; 96];
+        wide[..64].copy_from_slice(bytes);
+        let wide: [u64; 12] = (0..8)
+            .map(|off| u64::from_le_bytes(wide[off * 8..(off + 1) * 8].try_into().unwrap()))
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
+        let mut a0 = [0u64; 6];
+        let mut a1 = [0u64; 6];
+        a0.copy_from_slice(&wide[..6]);
+        a1.copy_from_slice(&wide[6..]);
+        let a0 = Fp(blst_fp { l: a0 });
+        let a1 = Fp(blst_fp { l: a1 });
+
+        a0.mul(R2) + a1.mul(R3)
+    }
 }
 
 impl PrimeField for Fp {
@@ -1573,5 +1604,5 @@ mod tests {
     crate::field_testing_suite!(Fp, "constants");
     crate::field_testing_suite!(Fp, "sqrt");
     crate::field_testing_suite!(Fp, "zeta");
-    // crate::field_testing_suite!(Fp, "from_uniform_bytes", 64);
+    crate::field_testing_suite!(Fp, "from_uniform_bytes", 64);
 }
