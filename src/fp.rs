@@ -799,7 +799,7 @@ impl ff::FromUniformBytes<64> for Fp {
     fn from_uniform_bytes(bytes: &[u8; 64]) -> Self {
         let mut wide = [0u8; 96];
         wide[..64].copy_from_slice(bytes);
-        let wide: [u64; 12] = (0..8)
+        let wide: [u64; 12] = (0..12)
             .map(|off| u64::from_le_bytes(wide[off * 8..(off + 1) * 8].try_into().unwrap()))
             .collect::<Vec<_>>()
             .try_into()
