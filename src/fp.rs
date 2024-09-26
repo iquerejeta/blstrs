@@ -49,21 +49,21 @@ const R: Fp = Fp(blst_fp {
     ],
 });
 
-/// R2 = 2^(384*2) mod p
-const R2: Fp = Fp(blst_fp {
-    l: [
-        0xf4df_1f34_1c34_1746,
-        0x0a76_e6a6_09d1_04f1,
-        0x8de5_476c_4c95_b6d5,
-        0x67eb_88a9_939d_83c0,
-        0x9a79_3e85_b519_952d,
-        0x1198_8fe5_92ca_e3aa,
-    ],
-});
-
-// This constant is needed to implement [`FormUniformBytes`].
+// These constant is needed to implement [`FormUniformBytes`].
 // It is left here in case the trait is implemented in the future.
-// // R3 = 2^(384*3) mod p
+// /// R2 = 2^(384*2) mod p
+// const R2: Fp = Fp(blst_fp {
+//     l: [
+//         0xf4df_1f34_1c34_1746,
+//         0x0a76_e6a6_09d1_04f1,
+//         0x8de5_476c_4c95_b6d5,
+//         0x67eb_88a9_939d_83c0,
+//         0x9a79_3e85_b519_952d,
+//         0x1198_8fe5_92ca_e3aa,
+//     ],
+// });
+//
+// /// R3 = 2^(384*3) mod p
 // const R3: Fp = Fp(blst_fp {
 //     l: [
 //         0xed48_ac6b_d94c_a1e0,
@@ -683,28 +683,6 @@ impl Fp {
     #[inline]
     pub fn square_assign(&mut self) {
         unsafe { blst_fp_sqr(&mut self.0, &self.0) };
-    }
-}
-
-#[cfg(feature = "gpu")]
-impl ec_gpu::GpuName for Fp {
-    fn name() -> String {
-        ec_gpu::name!()
-    }
-}
-
-#[cfg(feature = "gpu")]
-impl ec_gpu::GpuField for Fp {
-    fn one() -> Vec<u32> {
-        crate::u64_to_u32(&R.0.l[..])
-    }
-
-    fn r2() -> Vec<u32> {
-        crate::u64_to_u32(&R2.0.l[..])
-    }
-
-    fn modulus() -> Vec<u32> {
-        crate::u64_to_u32(&MODULUS[..])
     }
 }
 

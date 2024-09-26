@@ -1036,13 +1036,6 @@ impl SerdeObject for G1Projective {
 }
 //////// SERDE IMPLEMENTATION ///////////////
 
-#[cfg(feature = "gpu")]
-impl ec_gpu::GpuName for G1Affine {
-    fn name() -> String {
-        ec_gpu::name!()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     #![allow(clippy::eq_op)]

@@ -296,31 +296,9 @@ impl Field for Fp2 {
     }
 }
 
-#[cfg(feature = "gpu")]
-impl ec_gpu::GpuName for Fp2 {
-    fn name() -> String {
-        ec_gpu::name!()
-    }
-}
-
-// Use `one`, `r2` and `modulus` from the sub-field.
-#[cfg(feature = "gpu")]
-impl ec_gpu::GpuField for Fp2 {
-    fn one() -> Vec<u32> {
-        <Fp as ec_gpu::GpuField>::one()
-    }
-
-    fn r2() -> Vec<u32> {
-        Fp::r2()
-    }
-
-    fn modulus() -> Vec<u32> {
-        Fp::modulus()
-    }
-
-    fn sub_field_name() -> Option<String> {
-        use ec_gpu::GpuName;
-        Some(Fp::name())
+impl halo2curves::ff_ext::Legendre for Fp2 {
+    fn legendre(&self) -> i64 {
+        self.norm().legendre()
     }
 }
 
