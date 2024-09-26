@@ -1122,7 +1122,7 @@ mod tests {
         assert_eq!(G1Affine::identity().is_on_curve().unwrap_u8(), 1);
         assert_eq!(G1Affine::generator().is_on_curve().unwrap_u8(), 1);
 
-        let z = Fp::from_raw_unchecked([
+        let z = Fp::from_mont_unchecked([
             0xba7afa1f9a6fe250,
             0xfa0f5b595eafe731,
             0x3bdc477694c306e7,
@@ -1162,7 +1162,7 @@ mod tests {
         assert_ne!(a, b);
         assert_ne!(b, a);
 
-        let z = Fp::from_raw_unchecked([
+        let z = Fp::from_mont_unchecked([
             0xba7afa1f9a6fe250,
             0xfa0f5b595eafe731,
             0x3bdc477694c306e7,
@@ -1206,7 +1206,7 @@ mod tests {
         assert_eq!(G1Affine::from(b).is_on_curve().unwrap_u8(), 1);
         assert_eq!(G1Affine::from(b).is_identity().unwrap_u8(), 1);
 
-        let z = Fp::from_raw_unchecked([
+        let z = Fp::from_mont_unchecked([
             0xba7afa1f9a6fe250,
             0xfa0f5b595eafe731,
             0x3bdc477694c306e7,
@@ -1247,7 +1247,7 @@ mod tests {
             assert_eq!(
                 G1Affine::from(tmp),
                 G1Affine::from_raw_unchecked(
-                    Fp::from_raw_unchecked([
+                    Fp::from_mont_unchecked([
                         0x53e978ce58a9ba3c,
                         0x3ea0583c4f3d65f9,
                         0x4d20bb47f0012960,
@@ -1255,7 +1255,7 @@ mod tests {
                         0x26b552a39d7eb21f,
                         0x8895d26e68785
                     ]),
-                    Fp::from_raw_unchecked([
+                    Fp::from_mont_unchecked([
                         0x70110b3298293940,
                         0xda33c5393f1f6afc,
                         0xb86edfd16a5aa785,
@@ -1282,7 +1282,7 @@ mod tests {
             let a = G1Projective::identity();
             let mut b = G1Projective::generator();
             {
-                let z = Fp::from_raw_unchecked([
+                let z = Fp::from_mont_unchecked([
                     0xba7afa1f9a6fe250,
                     0xfa0f5b595eafe731,
                     0x3bdc477694c306e7,
@@ -1303,7 +1303,7 @@ mod tests {
             let a = G1Projective::identity();
             let mut b = G1Projective::generator();
             {
-                let z = Fp::from_raw_unchecked([
+                let z = Fp::from_mont_unchecked([
                     0xba7afa1f9a6fe250,
                     0xfa0f5b595eafe731,
                     0x3bdc477694c306e7,
@@ -1338,7 +1338,7 @@ mod tests {
 
         // Degenerate case
         {
-            let mut beta = Fp::from_raw_unchecked([
+            let mut beta = Fp::from_mont_unchecked([
                 0xcd03c9e48671f071,
                 0x5dab22461fcda5d2,
                 0x587042afd3851b95,
@@ -1356,7 +1356,7 @@ mod tests {
             assert_eq!(
                 G1Affine::from(c),
                 G1Affine::from(G1Projective::from_raw_unchecked(
-                    Fp::from_raw_unchecked([
+                    Fp::from_mont_unchecked([
                         0x29e1e987ef68f2d0,
                         0xc5f3ec531db03233,
                         0xacd6c4b6ca19730f,
@@ -1364,7 +1364,7 @@ mod tests {
                         0x46e3b2c5785cc7a9,
                         0x7e571d42d22ddd6
                     ]),
-                    Fp::from_raw_unchecked([
+                    Fp::from_mont_unchecked([
                         0x94d117a7e5a539e7,
                         0x8e17ef673d4b5d22,
                         0x9d746aaf508a33ea,
@@ -1393,7 +1393,7 @@ mod tests {
             let a = G1Affine::identity();
             let mut b = G1Projective::generator();
             {
-                let z = Fp::from_raw_unchecked([
+                let z = Fp::from_mont_unchecked([
                     0xba7afa1f9a6fe250,
                     0xfa0f5b595eafe731,
                     0x3bdc477694c306e7,
@@ -1414,7 +1414,7 @@ mod tests {
             let a = G1Affine::identity();
             let mut b = G1Projective::generator();
             {
-                let z = Fp::from_raw_unchecked([
+                let z = Fp::from_mont_unchecked([
                     0xba7afa1f9a6fe250,
                     0xfa0f5b595eafe731,
                     0x3bdc477694c306e7,
@@ -1449,7 +1449,7 @@ mod tests {
 
         // Degenerate case
         {
-            let mut beta = Fp::from_raw_unchecked([
+            let mut beta = Fp::from_mont_unchecked([
                 0xcd03c9e48671f071,
                 0x5dab22461fcda5d2,
                 0x587042afd3851b95,
@@ -1468,7 +1468,7 @@ mod tests {
             assert_eq!(
                 G1Affine::from(c),
                 G1Affine::from(G1Projective::from_raw_unchecked(
-                    Fp::from_raw_unchecked([
+                    Fp::from_mont_unchecked([
                         0x29e1e987ef68f2d0,
                         0xc5f3ec531db03233,
                         0xacd6c4b6ca19730f,
@@ -1476,7 +1476,7 @@ mod tests {
                         0x46e3b2c5785cc7a9,
                         0x7e571d42d22ddd6
                     ]),
-                    Fp::from_raw_unchecked([
+                    Fp::from_mont_unchecked([
                         0x94d117a7e5a539e7,
                         0x8e17ef673d4b5d22,
                         0x9d746aaf508a33ea,

@@ -618,8 +618,16 @@ impl Fp {
 
     /// Constructs an element of `Fp` from a little-endian array of limbs without checking that it
     /// is canonical and without converting it to Montgomery form (i.e. without multiplying by `R`).
-    pub fn from_raw_unchecked(l: [u64; 6]) -> Fp {
+    pub(super) fn from_mont_unchecked(l: [u64; 6]) -> Fp {
         Fp(blst_fp { l })
+    }
+
+    /// `u64s` represent a little-endian non-Montgomery form integer mod p.
+    pub fn from_u64s_le(bytes: &[u64; 6]) -> CtOption<Self> {
+        let is_some = Choice::from(is_valid_u64(bytes) as u8);
+        let mut out = blst_fp::default();
+        unsafe { blst_fp_from_uint64(&mut out, bytes.as_ptr()) };
+        CtOption::new(Fp(out), is_some)
     }
 
     /// Multiplies `self` with `3`, returning the result.
@@ -641,14 +649,6 @@ impl Fp {
         let mut out = *self;
         unsafe { blst_fp_lshift(&mut out.0, &self.0, count) };
         out
-    }
-
-    // `u64s` represent a little-endian non-Montgomery form integer mod p.
-    pub fn from_u64s_le(bytes: &[u64; 6]) -> CtOption<Self> {
-        let is_some = Choice::from(is_valid_u64(bytes) as u8);
-        let mut out = blst_fp::default();
-        unsafe { blst_fp_from_uint64(&mut out, bytes.as_ptr()) };
-        CtOption::new(Fp(out), is_some)
     }
 
     pub fn num_bits(&self) -> u32 {
@@ -708,7 +708,6 @@ impl ec_gpu::GpuField for Fp {
     }
 }
 
-///////// MISSING CONSTANTS AND TRAITS ///////////////
 // Wrapper needed, because we don't have Default implemented for [0u8; 48]
 #[derive(Copy, Clone)]
 pub struct FpRepr([u8; 48]);
@@ -1405,7 +1404,7 @@ mod tests {
             }
         }
         // a = 4
-        let a = Fp::from_raw_unchecked([
+        let a = Fp::from_mont_unchecked([
             0xaa27_0000_000c_fff3,
             0x53cc_0032_fc34_000a,
             0x478f_e97a_6b0a_807f,
@@ -1418,7 +1417,7 @@ mod tests {
             // sqrt(4) = -2
             -a.sqrt().unwrap(),
             // 2
-            Fp::from_raw_unchecked([
+            Fp::from_mont_unchecked([
                 0x3213_0000_0006_554f,
                 0xb93c_0018_d6c4_0005,
                 0x5760_5e0d_b0dd_bb51,
@@ -1556,7 +1555,7 @@ mod tests {
 
     #[test]
     fn test_inversion() {
-        let a = Fp::from_raw_unchecked([
+        let a = Fp::from_mont_unchecked([
             0x43b4_3a50_78ac_2076,
             0x1ce0_7630_46f8_962b,
             0x724a_5276_486d_735c,
@@ -1564,7 +1563,7 @@ mod tests {
             0x2095_bd5b_b4ca_9331,
             0x03b3_5b38_94b0_f7da,
         ]);
-        let b = Fp::from_raw_unchecked([
+        let b = Fp::from_mont_unchecked([
             0x69ec_d704_0952_148f,
             0x985c_cc20_2219_0f55,
             0xe19b_ba36_a9ad_2f41,
