@@ -145,7 +145,7 @@ impl<'a, 'b> Sub<&'b Fr> for &'a Fr {
 
     #[inline]
     fn sub(self, rhs: &'b Fr) -> Fr {
-        self.sub(rhs)
+        self.sub_ref(rhs)
     }
 }
 
@@ -165,7 +165,7 @@ impl<'a, 'b> Mul<&'b Fr> for &'a Fr {
     fn mul(self, rhs: &'b Fr) -> Fr {
         // Schoolbook multiplication
 
-        self.mul(rhs)
+        self.mul_ref(rhs)
     }
 }
 
@@ -331,7 +331,7 @@ impl Fr {
     /// Converts from an integer represented in little endian
     /// into its (congruent) `Fr` representation.
     pub const fn from_raw(val: [u64; 4]) -> Self {
-        (&Fr(val)).mul(&R2)
+        Fr(val).mul(&R2)
     }
 
     /// Squares this element.
@@ -570,12 +570,12 @@ impl Fr {
         let (r7, _) = adc(r7, carry2, carry);
 
         // Result may be within MODULUS of the correct value
-        (&Fr([r4, r5, r6, r7])).sub(&MODULUS)
+        Fr([r4, r5, r6, r7]).sub(&MODULUS)
     }
 
     /// Multiplies this element by another element
     #[inline]
-    pub const fn mul(&self, rhs: &Self) -> Self {
+    pub const fn mul_ref(&self, rhs: &Self) -> Self {
         // Schoolbook multiplication
 
         let (r0, carry) = mac(0, self.0[0], rhs.0[0], 0);
@@ -601,9 +601,14 @@ impl Fr {
         Fr::montgomery_reduce(r0, r1, r2, r3, r4, r5, r6, r7)
     }
 
+    #[inline]
+    pub const fn mul(self, rhs: &Self) -> Self {
+        self.mul_ref(rhs)
+    }
+
     /// Subtracts another element from this element.
     #[inline]
-    pub const fn sub(&self, rhs: &Self) -> Self {
+    pub const fn sub_ref(&self, rhs: &Self) -> Self {
         let (d0, borrow) = sbb(self.0[0], rhs.0[0], 0);
         let (d1, borrow) = sbb(self.0[1], rhs.0[1], borrow);
         let (d2, borrow) = sbb(self.0[2], rhs.0[2], borrow);
@@ -619,6 +624,11 @@ impl Fr {
         Fr([d0, d1, d2, d3])
     }
 
+    #[inline]
+    pub const fn sub(self, rhs: &Self) -> Self {
+        self.sub_ref(rhs)
+    }
+
     /// Adds this element to another element.
     #[inline]
     pub const fn add(&self, rhs: &Self) -> Self {
@@ -629,7 +639,7 @@ impl Fr {
 
         // Attempt to subtract the modulus, to ensure the value
         // is smaller than the modulus.
-        (&Fr([d0, d1, d2, d3])).sub(&MODULUS)
+        Fr([d0, d1, d2, d3]).sub(&MODULUS)
     }
 
     /// Negates this element.

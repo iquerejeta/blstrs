@@ -601,7 +601,7 @@ where
 }
 
 pub fn big_to_fe<F: PrimeField>(e: &BigUint) -> F {
-    let modulus = BigUint::from_bytes_le((&-F::ONE).to_repr().as_ref()) + 1usize;
+    let modulus = BigUint::from_bytes_le((-F::ONE).to_repr().as_ref()) + 1usize;
     let e = e % modulus;
     let bytes = e.to_bytes_le();
     let mut repr = F::Repr::default();

@@ -637,7 +637,7 @@ impl AffinePoint {
         AffineNielsPoint {
             v_plus_u: Fq::add(self.v, &self.u),
             v_minus_u: Fq::sub(self.v, &self.u),
-            t2d: Fq::mul(Fq::mul(self.u, self.v), &EDWARDS_D2),
+            t2d: Fq::mul(Fq::mul(self.u, &self.v), &EDWARDS_D2),
         }
     }
 
