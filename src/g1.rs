@@ -7,7 +7,7 @@ use core::{
     iter::Sum,
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
-use std::io::{Read, Write};
+use std::io::Read;
 
 use blst::*;
 use ff::Field;
@@ -15,7 +15,6 @@ use group::{
     prime::{PrimeCurve, PrimeCurveAffine, PrimeGroup},
     Curve, Group, GroupEncoding, UncompressedEncoding, WnafGroup,
 };
-use halo2curves::serde::SerdeObject;
 use pasta_curves::arithmetic::{Coordinates, CurveAffine, CurveExt};
 use rand_core::RngCore;
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
@@ -848,7 +847,6 @@ impl PairingCurveAffine for G1Affine {
     }
 }
 
-//////// MISSING TRAITS ////////////////
 impl Add for G1Affine {
     type Output = <Self as PrimeCurveAffine>::Curve;
 
@@ -980,61 +978,6 @@ impl CurveAffine for G1Affine {
         B
     }
 }
-
-//////// SERDE IMPLEMENTATION ///////////////
-impl SerdeObject for G1Affine {
-    fn from_raw_bytes_unchecked(bytes: &[u8]) -> Self {
-        todo!()
-    }
-
-    fn from_raw_bytes(bytes: &[u8]) -> Option<Self> {
-        todo!()
-    }
-
-    fn to_raw_bytes(&self) -> Vec<u8> {
-        todo!()
-    }
-
-    fn read_raw_unchecked<R: Read>(reader: &mut R) -> Self {
-        todo!()
-    }
-
-    fn read_raw<R: Read>(reader: &mut R) -> std::io::Result<Self> {
-        Self::read_raw_og(reader)
-    }
-
-    fn write_raw<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
-        let _ = self.write_raw_og(writer)?;
-        Ok(())
-    }
-}
-
-impl SerdeObject for G1Projective {
-    fn from_raw_bytes_unchecked(bytes: &[u8]) -> Self {
-        todo!()
-    }
-
-    fn from_raw_bytes(bytes: &[u8]) -> Option<Self> {
-        todo!()
-    }
-
-    fn to_raw_bytes(&self) -> Vec<u8> {
-        todo!()
-    }
-
-    fn read_raw_unchecked<R: Read>(reader: &mut R) -> Self {
-        todo!()
-    }
-
-    fn read_raw<R: Read>(reader: &mut R) -> std::io::Result<Self> {
-        todo!()
-    }
-
-    fn write_raw<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
-        todo!()
-    }
-}
-//////// SERDE IMPLEMENTATION ///////////////
 
 #[cfg(test)]
 mod tests {

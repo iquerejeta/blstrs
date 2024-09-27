@@ -296,6 +296,10 @@ impl Field for Fp2 {
     }
 }
 
+impl ff::WithSmallOrderMulGroup<3> for Fp2 {
+    const ZETA: Self = Fp2::new(Fp::ZETA, Fp::ZERO);
+}
+
 impl halo2curves::ff_ext::Legendre for Fp2 {
     fn legendre(&self) -> i64 {
         self.norm().legendre()

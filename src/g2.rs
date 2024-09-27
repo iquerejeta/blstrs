@@ -8,7 +8,6 @@ use core::{
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
 use std::convert::TryInto;
-use std::io::{Read, Write};
 use std::ops::{Deref, DerefMut};
 
 use blst::*;
@@ -17,7 +16,6 @@ use group::{
     prime::{PrimeCurve, PrimeCurveAffine, PrimeGroup},
     Curve, Group, GroupEncoding, UncompressedEncoding, WnafGroup,
 };
-use halo2curves::serde::SerdeObject;
 use pasta_curves::arithmetic::{Coordinates, CurveAffine, CurveExt};
 use rand_core::RngCore;
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
@@ -385,12 +383,13 @@ impl G2Affine {
         unsafe { Choice::from(blst_p2_affine_in_g2(&self.0) as u8) }
     }
 
-    /// Returns true if this point is on the curve. This should always return
-    /// true unless an "unchecked" API was used.
-    pub fn is_on_curve(&self) -> Choice {
-        // FIXME: is_identity check should happen in blst
-        unsafe { Choice::from(blst_p2_affine_on_curve(&self.0) as u8) }
-    }
+    // TODO: Remove. moved to CurveAffine trait.
+    // /// Returns true if this point is on the curve. This should always return
+    // /// true unless an "unchecked" API was used.
+    // pub fn is_on_curve(&self) -> Choice {
+    //     // FIXME: is_identity check should happen in blst
+    //     unsafe { Choice::from(blst_p2_affine_on_curve(&self.0) as u8) }
+    // }
 
     pub fn from_raw_unchecked(x: Fp2, y: Fp2, _infinity: bool) -> Self {
         // FIXME: what about infinity?
@@ -538,12 +537,13 @@ impl G2Projective {
         G2Projective(out)
     }
 
-    /// Returns true if this point is on the curve. This should always return
-    /// true unless an "unchecked" API was used.
-    pub fn is_on_curve(&self) -> Choice {
-        let is_on_curve = unsafe { Choice::from(blst_p2_on_curve(&self.0) as u8) };
-        is_on_curve | self.is_identity()
-    }
+    // TODO: Remove. Moved to CurveExt trait.
+    // /// Returns true if this point is on the curve. This should always return
+    // /// true unless an "unchecked" API was used.
+    // pub fn is_on_curve(&self) -> Choice {
+    //     let is_on_curve = unsafe { Choice::from(blst_p2_on_curve(&self.0) as u8) };
+    //     is_on_curve | self.is_identity()
+    // }
 
     fn multiply(&self, scalar: &Scalar) -> G2Projective {
         let mut out = blst_p2::default();
@@ -943,10 +943,6 @@ impl PrimeField for Fp2 {
     }
 }
 
-impl WithSmallOrderMulGroup<3> for Fp2 {
-    const ZETA: Self = todo!(); // Fp2::new(Fp::ZETA.mul(Fp::ZETA), Fp::ZERO);
-}
-
 const G2_B: Fp2 = Fp2(blst_fp2 {
     fp: [
         blst_fp {
@@ -972,7 +968,14 @@ impl CurveExt for G2Projective {
     const CURVE_ID: &'static str = "";
 
     fn endo(&self) -> Self {
-        todo!()
+        let x_zeta = self.x() * Fp2::ZETA;
+        let raw = blst_p2 {
+            x: x_zeta.0,
+            y: self.y().0,
+            z: self.z().0,
+        };
+
+        G2Projective(raw)
     }
 
     fn jacobian_coordinates(&self) -> (Self::Base, Self::Base, Self::Base) {
@@ -983,11 +986,12 @@ impl CurveExt for G2Projective {
     }
 
     fn hash_to_curve<'a>(domain_prefix: &'a str) -> Box<dyn Fn(&[u8]) -> Self + 'a> {
-        todo!()
+        unimplemented!()
     }
 
     fn is_on_curve(&self) -> Choice {
-        self.is_on_curve()
+        let is_on_curve = unsafe { Choice::from(blst_p2_on_curve(&self.0) as u8) };
+        is_on_curve | self.is_identity()
     }
 
     fn a() -> Self::Base {
@@ -1014,109 +1018,29 @@ impl CurveExt for G2Projective {
 
 impl CurveAffine for G2Affine {
     type ScalarExt = Scalar;
-    type Base = Fp;
+    type Base = Fp2;
     type CurveExt = G2Projective;
 
     fn coordinates(&self) -> CtOption<Coordinates<Self>> {
-        todo!()
+        Coordinates::from_xy(self.x(), self.y())
     }
 
     fn from_xy(x: Self::Base, y: Self::Base) -> CtOption<Self> {
-        todo!()
+        let raw = blst_p2_affine { x: x.0, y: y.0 };
+        let p = G2Affine(raw);
+        CtOption::new(p, p.is_on_curve())
     }
 
     fn is_on_curve(&self) -> Choice {
-        todo!()
+        unsafe { Choice::from(blst_p2_affine_on_curve(&self.0) as u8) }
     }
 
     fn a() -> Self::Base {
-        todo!()
+        G2_A
     }
 
     fn b() -> Self::Base {
-        todo!()
-    }
-}
-
-impl SerdeObject for G2Projective {
-    fn from_raw_bytes_unchecked(bytes: &[u8]) -> Self {
-        todo!()
-    }
-
-    fn from_raw_bytes(bytes: &[u8]) -> Option<Self> {
-        todo!()
-    }
-
-    fn to_raw_bytes(&self) -> Vec<u8> {
-        todo!()
-    }
-
-    fn read_raw_unchecked<R: Read>(reader: &mut R) -> Self {
-        todo!()
-    }
-
-    fn read_raw<R: Read>(reader: &mut R) -> std::io::Result<Self> {
-        todo!()
-    }
-
-    fn write_raw<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
-        if self.is_identity().into() {
-            writer.write_all(&[1])?;
-        } else {
-            writer.write_all(&[0])?;
-        }
-        let raw = self.to_uncompressed();
-        writer.write_all(&raw)?;
-
-        Ok(())
-    }
-}
-
-impl SerdeObject for G2Affine {
-    fn from_raw_bytes_unchecked(bytes: &[u8]) -> Self {
-        todo!()
-    }
-
-    fn from_raw_bytes(bytes: &[u8]) -> Option<Self> {
-        todo!()
-    }
-
-    fn to_raw_bytes(&self) -> Vec<u8> {
-        todo!()
-    }
-
-    fn read_raw_unchecked<R: Read>(reader: &mut R) -> Self {
-        todo!()
-    }
-
-    fn read_raw<R: Read>(reader: &mut R) -> std::io::Result<Self> {
-        let mut buf = [0u8];
-        reader.read_exact(&mut buf)?;
-        let _infinity = buf[0] == 1;
-
-        let mut buf = [0u8; UNCOMPRESSED_SIZE];
-        reader.read_exact(&mut buf)?;
-        let res = Self::from_uncompressed_unchecked(&buf);
-        if res.is_some().into() {
-            Ok(res.unwrap())
-        } else {
-            Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                "not on curve",
-            ))
-        }
-    }
-
-    fn write_raw<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
-        if self.is_identity().into() {
-            writer.write_all(&[1])?;
-        } else {
-            writer.write_all(&[0])?;
-        }
-        let raw = self.to_uncompressed();
-        writer.write_all(&raw)?;
-
-        Ok(())
+        G2_B
     }
 }
 
