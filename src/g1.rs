@@ -7,7 +7,7 @@ use core::{
     iter::Sum,
     ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign},
 };
-use std::io::Read;
+use std::{convert::TryInto, io::Read};
 
 use blst::*;
 use ff::Field;
@@ -15,6 +15,7 @@ use group::{
     prime::{PrimeCurve, PrimeCurveAffine, PrimeGroup},
     Curve, Group, GroupEncoding, UncompressedEncoding, WnafGroup,
 };
+use halo2curves::serde::SerdeObject;
 use pasta_curves::arithmetic::{Coordinates, CurveAffine, CurveExt};
 use rand_core::RngCore;
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
@@ -405,22 +406,12 @@ impl G1Affine {
     }
 
     pub fn write_raw_og<W: std::io::Write>(&self, mut writer: W) -> Result<usize, std::io::Error> {
-        if self.is_identity().into() {
-            writer.write_all(&[1])?;
-        } else {
-            writer.write_all(&[0])?;
-        }
         let raw = self.to_uncompressed();
         writer.write_all(&raw)?;
-
-        Ok(Self::raw_fmt_size())
+        Ok(UNCOMPRESSED_SIZE)
     }
 
     pub fn read_raw_og<R: Read>(mut reader: R) -> Result<Self, std::io::Error> {
-        let mut buf = [0u8];
-        reader.read_exact(&mut buf)?;
-        let _infinity = buf[0] == 1;
-
         let mut buf = [0u8; UNCOMPRESSED_SIZE];
         reader.read_exact(&mut buf)?;
         let res = Self::from_uncompressed_unchecked(&buf);
@@ -429,16 +420,12 @@ impl G1Affine {
         } else {
             Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
-                "not on curve",
+                "Not on curve.",
             ))
         }
     }
 
     pub fn read_raw_checked<R: Read>(mut reader: R) -> Result<Self, std::io::Error> {
-        let mut buf = [0u8];
-        reader.read_exact(&mut buf)?;
-        let _infinity = buf[0] == 1;
-
         let mut buf = [0u8; UNCOMPRESSED_SIZE];
         reader.read_exact(&mut buf)?;
         let res = Self::from_uncompressed(&buf);
@@ -447,9 +434,39 @@ impl G1Affine {
         } else {
             Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
-                "not on curve",
+                "Not on curve.",
             ))
         }
+    }
+}
+
+impl SerdeObject for G1Affine {
+    fn from_raw_bytes_unchecked(bytes: &[u8]) -> Self {
+        debug_assert_eq!(bytes.len(), UNCOMPRESSED_SIZE);
+        let input: [u8; UNCOMPRESSED_SIZE] = bytes.try_into().unwrap();
+        Self::from_uncompressed_unchecked(&input).unwrap()
+    }
+
+    fn from_raw_bytes(bytes: &[u8]) -> Option<Self> {
+        debug_assert_eq!(bytes.len(), UNCOMPRESSED_SIZE);
+        let input: [u8; UNCOMPRESSED_SIZE] = bytes.try_into().unwrap();
+        Self::from_uncompressed(&input).into()
+    }
+
+    fn to_raw_bytes(&self) -> Vec<u8> {
+        self.to_uncompressed().into()
+    }
+
+    fn read_raw_unchecked<R: Read>(reader: &mut R) -> Self {
+        Self::read_raw_og(reader).unwrap()
+    }
+
+    fn read_raw<R: Read>(reader: &mut R) -> std::io::Result<Self> {
+        Self::read_raw_checked(reader)
+    }
+
+    fn write_raw<W: std::io::Write>(&self, writer: &mut W) -> std::io::Result<()> {
+        writer.write_all(&self.to_uncompressed())
     }
 }
 
@@ -1512,12 +1529,14 @@ mod tests {
         ]);
 
         for _ in 0..100 {
+            // Affine
             let el: G1Affine = G1Projective::random(&mut rng).into();
             let c = el.to_compressed();
             assert_eq!(G1Affine::from_compressed(&c).unwrap(), el);
             assert_eq!(G1Affine::from_compressed_unchecked(&c).unwrap(), el);
 
             let u = el.to_uncompressed();
+            dbg!(u);
             assert_eq!(G1Affine::from_uncompressed(&u).unwrap(), el);
             assert_eq!(G1Affine::from_uncompressed_unchecked(&u).unwrap(), el);
 
@@ -1525,6 +1544,12 @@ mod tests {
             assert_eq!(G1Affine::from_bytes(&c).unwrap(), el);
             assert_eq!(G1Affine::from_bytes_unchecked(&c).unwrap(), el);
 
+            let c = el.to_raw_bytes();
+            dbg!(c.clone());
+            assert_eq!(G1Affine::from_raw_bytes(&c).unwrap(), el);
+            assert_eq!(G1Affine::from_raw_bytes_unchecked(&c), el);
+
+            // Projective
             let el = G1Projective::random(&mut rng);
             let c = el.to_compressed();
             assert_eq!(G1Projective::from_compressed(&c).unwrap(), el);
