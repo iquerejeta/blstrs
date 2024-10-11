@@ -754,8 +754,11 @@ impl PartialOrd for Fr {
     }
 }
 
+// NOTE: Fr does not contain a subgroup of order 3. However, implementing
+// this trait is required in order to have implement `CurveExt` for JubJub.
 impl WithSmallOrderMulGroup<3> for Fr {
-    const ZETA: Self = unimplemented!();
+    // WARNING: This is not a cubic root in Fr. (But it makes cargo doc happy)
+    const ZETA: Self = Self::ZERO;
 }
 
 impl PrimeFieldBits for Fr {
