@@ -1002,18 +1002,33 @@ impl PrimeField for Fp2 {
     }
 }
 
+const G2_A: Fp2 = Fp2::ZERO;
 const G2_B: Fp2 = Fp2(blst_fp2 {
     fp: [
         blst_fp {
-            l: [4, 0, 0, 0, 0, 0],
+            // 0x04 in Montgomery form.
+            l: [
+                0xaa27_0000_000c_fff3,
+                0x53cc_0032_fc34_000a,
+                0x478f_e97a_6b0a_807f,
+                0xb1d3_7ebe_e6ba_24d7,
+                0x8ec9_733b_bf78_ab2f,
+                0x09d6_4551_3d83_de7e,
+            ],
         },
+        // 0x04 in Montgomery form.
         blst_fp {
-            l: [4, 0, 0, 0, 0, 0],
+            l: [
+                0xaa27_0000_000c_fff3,
+                0x53cc_0032_fc34_000a,
+                0x478f_e97a_6b0a_807f,
+                0xb1d3_7ebe_e6ba_24d7,
+                0x8ec9_733b_bf78_ab2f,
+                0x09d6_4551_3d83_de7e,
+            ],
         },
     ],
 });
-
-const G2_A: Fp2 = Fp2::ZERO;
 
 impl Default for G2Projective {
     fn default() -> Self {
