@@ -33,9 +33,17 @@ pub struct G1Affine(pub(crate) blst_p1_affine);
 const COMPRESSED_SIZE: usize = 48;
 const UNCOMPRESSED_SIZE: usize = 96;
 
-pub const A: Fp = Fp::ZERO;
-pub const B: Fp = Fp(blst_fp {
-    l: [4, 0, 0, 0, 0, 0],
+const A: Fp = Fp::ZERO;
+const B: Fp = Fp(blst_fp {
+    // 0x04 in Montgomery form.
+    l: [
+        0xaa270000000cfff3,
+        0x53cc0032fc34000a,
+        0x478fe97a6b0a807f,
+        0xb1d37ebee6ba24d7,
+        0x8ec9733bbf78ab2f,
+        0x09d645513d83de7e,
+    ],
 });
 
 impl fmt::Debug for G1Affine {
@@ -366,12 +374,6 @@ impl G1Affine {
     /// unless an "unchecked" API was used.
     pub fn is_torsion_free(&self) -> Choice {
         unsafe { Choice::from(blst_p1_affine_in_g1(&self.0) as u8) }
-    }
-
-    /// Returns true if this point is on the curve. This should always return
-    /// true unless an "unchecked" API was used.
-    pub fn is_on_curve(&self) -> Choice {
-        unsafe { Choice::from(blst_p1_affine_on_curve(&self.0) as u8) }
     }
 
     pub fn from_raw_unchecked(x: Fp, y: Fp, _infinity: bool) -> Self {
@@ -984,7 +986,7 @@ impl CurveAffine for G1Affine {
     }
 
     fn is_on_curve(&self) -> Choice {
-        (self.y().square() - self.x().square() * self.x()).ct_eq(&B) | self.is_identity()
+        unsafe { Choice::from(blst_p1_affine_on_curve(&self.0) as u8) }
     }
 
     fn a() -> Self::Base {
