@@ -882,7 +882,7 @@ impl CurveExt for G1Projective {
     type ScalarExt = Scalar;
     type Base = Fp;
     type AffineExt = G1Affine;
-    const CURVE_ID: &'static str = "";
+    const CURVE_ID: &'static str = "bls12_381";
 
     fn endo(&self) -> Self {
         G1Projective::from_raw_unchecked(self.x() * ZETA_BASE, self.y(), self.z())
